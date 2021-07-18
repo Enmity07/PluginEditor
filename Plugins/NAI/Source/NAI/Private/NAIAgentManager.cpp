@@ -11,8 +11,6 @@
 ANAIAgentManager::ANAIAgentManager()
 {
 	MaxAgentCount = MAX_AGENT_PRE_ALLOC;
-
-	ALocationVariable = 0.0f;
 	
 	WorldRef = nullptr;
 	NavSysRef = nullptr;
@@ -56,7 +54,7 @@ void ANAIAgentManager::Initialize()
 void ANAIAgentManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
+	
 	if(WorldRef)
 	{
 		const int AgentCount = AgentMap.Num();
@@ -64,6 +62,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		{
 			for(int i = 0; i < AgentCount; i++)
 			{
+				
 				// Get the next Guid and use it to get a copy of the agent
 				const FGuid Guid = AgentGuids[i];
 				FAgent Agent = AgentMap[Guid];
@@ -74,11 +73,12 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Calculate the Agents Speed and update the property on the AgentClient object
 				const FVector AgentLocation = Agent.AgentClient->GetActorLocation();
 				Agent.CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
-				
-				// If this agent is halted, skip it
-				if(Agent.bIsHalted)
-					continue;
-
+		
+		        if(Agent.bIsHalted)
+		        {
+		            continue;
+		        }
+		            
 				// Kick of an Async Path Task if the agent is ready for one
 				if(Agent.Timers.bIsPathReady)
 				{
@@ -148,8 +148,6 @@ void ANAIAgentManager::UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathP
 
 void ANAIAgentManager::AgentPathTask(const FGuid& Guid, const FVector& Location, const FVector& Start)
 {
-	AgentMap[Guid].SetIsWaitingForPath(true);
-	
 	FPathFindingQuery PathfindingQuery;
 	PathfindingQuery.EndLocation = Location;
 	PathfindingQuery.StartLocation = Start;

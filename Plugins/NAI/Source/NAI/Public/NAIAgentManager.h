@@ -96,18 +96,14 @@ public:
 
 	// Whether or not this agent is halted
 	uint8 bIsHalted : 1;
-	// Will be true if an Async Path Task output is pending
-	uint8 bIsPathPending : 1;
 
 	FORCEINLINE void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
-	FORCEINLINE void SetIsWaitingForPath(const uint8 IsWaiting) { bIsPathPending = IsWaiting; }
-
+	
 	// Update the Agents PathPoints for their current navigation path
 	FORCEINLINE void UpdatePathPoints(const TArray<FNavPathPoint>& Points)
 	{
 		CurrentPath = Points;
-		bIsPathPending = false;
 	}
 
 	// Update the Timer settings for each agent using the passed in DeltaTime
@@ -179,7 +175,7 @@ public:
 		(ClampMin = 0, ClampMax = 10000, UIMin = 0, UIMax = 10000))
 	int MaxAgentCount;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager|Agents|Limits")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager")
 	FVector TargetLocation;
 	
 protected:
@@ -201,9 +197,6 @@ private:
 	void Initialize();
 	
 private:
-	UPROPERTY()
-	float ALocationVariable;
-	
 	UPROPERTY()
 	class UWorld *WorldRef;
 	UPROPERTY()

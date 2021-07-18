@@ -40,6 +40,9 @@ void ANAIAgentClient::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if(AgentManagerVariable)
+		AgentManager = AgentManagerVariable;
+	
 	if(AgentManager)
 	{
 		// Create the Agent guid at Runtime, not in the constructor
@@ -61,12 +64,11 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentProperties.TracingTickRate = AvoidanceTickInterval;
 
 		// Timer settings
-		Agent.Timers.bIsMoveReady = false;
-		Agent.Timers.bIsPathReady = false;
-		Agent.Timers.bIsTraceReady = false;
+		Agent.Timers.bIsMoveReady = true;
+		Agent.Timers.bIsPathReady = true;
+		Agent.Timers.bIsTraceReady = true;
 		
 		Agent.bIsHalted = false;
-		Agent.bIsPathPending = false;
 
 		// Bind the PathDelegate function to the Async Navigation Query
 		Agent.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathDelegate);

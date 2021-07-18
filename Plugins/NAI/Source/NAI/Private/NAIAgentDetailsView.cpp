@@ -7,8 +7,15 @@
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
 #include "NAIAgentClient.h"
-#include "../../../../../../../../UE_4.26/Engine/Plugins/Experimental/AlembicImporter/Source/AlembicLibrary/Public/AbcFile.h"
+// #include "../../../../../../../../UE_4.26/Engine/Plugins/Experimental/AlembicImporter/Source/AlembicLibrary/Public/AbcFile.h"
 #include "Styling/SlateStyleRegistry.h"
+
+FReply FCustomAgentClientDetailsPanel::OnTestButtonClicked()
+{
+	if(LogoImage.IsValid())
+		LogoImage->SetVisibility(EVisibility::Hidden);
+	return FReply::Handled();
+}
 
 void FCustomAgentClientDetailsPanel::OnMoveSpeedPropertyChanged()
 {
@@ -49,9 +56,16 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 	 * Do this property by property until you've created a full custom detail view
 	 */
 	
+	// Add a custom row to contain the logo
+	
+	// Edit the Agent Category
+	IDetailCategoryBuilder& CustomAgentCategory = DetailBuilder.EditCategory("Agent");
+	// Grab the custom Slate Style for this module
+	const ISlateStyle* SlateStyle = FSlateStyleRegistry::FindSlateStyle("NAIStyleSet");
+
 	// Get Property
 	MoveSpeedHandle = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(ANAIAgentClient, MoveSpeed));
-	//check(MoveSpeedHandle.IsValid());
+	check(MoveSpeedHandle.IsValid());
 	// Bind Delegate
 	MoveSpeedHandle.Get()->SetOnPropertyValueChanged(
 	FSimpleDelegate::CreateSP(this,
@@ -63,26 +77,19 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 	float Value;
 	MoveSpeedHandle.Get()->GetValue(Value);
 	
-	CustomPropertyRow->CustomWidget()
-	.NameContent()
-	[
-		SNew(STextBlock)
-		.Text(FText::FromString("Name"))
-	]
-	.ValueContent()
-	[
-		SAssignNew(MoveSpeedTextBox, SEditableTextBox)
-		.Text(FText::FromString(FString::SanitizeFloat(Value)))
-		.OnTextCommitted(this, &FCustomAgentClientDetailsPanel::OnMoveSpeedCommitted)
-	];
-
-	// Add a custom row to contain the logo
+	//CustomPropertyRow->CustomWidget()
+	//.NameContent()
+	//[
+	//	SNew(STextBlock)
+	//	.Text(FText::FromString("Name"))
+	//];
+	//.ValueContent()
+	//[
+	//	SAssignNew(MoveSpeedTextBox, SEditableTextBox)
+	//	.Text(FText::FromString(FString::SanitizeFloat(Value)))
+	//	.OnTextCommitted(this, &FCustomAgentClientDetailsPanel::OnMoveSpeedCommitted)
+	//];
 	
-	// Edit the Agent Category
-	IDetailCategoryBuilder& CustomAgentCategory = DetailBuilder.EditCategory("Agent");
-	// Grab the custom Slate Style for this module
-	const ISlateStyle* SlateStyle = FSlateStyleRegistry::FindSlateStyle("NAIStyleSet");
-
 	// Add the custom Row
 	CustomAgentCategory.AddCustomRow(FText::FromString("Agent Settings"))
 	.WholeRowContent()
@@ -96,11 +103,42 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 			.HAlign(HAlign_Center)
 			[
 				// Create the SImage to put the logo image in
-				SNew(SImage)
+				SAssignNew(LogoImage, SImage)
 				.Image(SlateStyle->GetBrush(TEXT("MainNAIAgentClient_logo")))
 			]
 		]
+		+ SVerticalBox::Slot()
+		.Padding(FMargin(0.0f, 10.0f, 0.0f, 10.0f))
+		.MaxHeight(25.0f)
+		[
+			SNew(SButton)
+			.ContentScale(FVector2D())
+			.Text(FText::FromString(TEXT("A Button")))
+			.OnClicked_Raw(this, &FCustomAgentClientDetailsPanel::OnTestButtonClicked)
+		]
 	];
+	
+
+}
+
+void FCustomAgentClientDetailsPanel::CreatePathToPlayerDetails()
+{
+}
+
+void FCustomAgentClientDetailsPanel::CreatePathToLocationDetails()
+{
+}
+
+void FCustomAgentClientDetailsPanel::CreateFollowCustomPathDetails()
+{
+}
+
+void FCustomAgentClientDetailsPanel::CreateStaticPathToLocationDetails()
+{
+}
+
+void FCustomAgentClientDetailsPanel::CreateDynamicPathToLocationDetails()
+{
 }
 
 TSharedRef<IDetailCustomization> FCustomAgentManagerDetailsPanel::MakeInstance()
