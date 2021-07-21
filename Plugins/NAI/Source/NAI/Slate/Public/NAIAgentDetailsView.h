@@ -30,6 +30,8 @@ private:
 	TSharedPtr<SImage> LogoImage;
 	
 	FReply OnTestButtonClicked();
+
+	TSharedPtr<STextBlock> PathToPlayerInformation;
 	
 	// ----------------------------
 	// Class Property Customization

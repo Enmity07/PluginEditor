@@ -82,7 +82,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Kick of an Async Path Task if the agent is ready for one
 				if(Agent.Timers.bIsPathReady)
 				{
-					AgentPathTask(Guid, TargetLocation, AgentLocation);
+					AgentPathTask(Guid, PlayerLocation, AgentLocation);
 					Agent.Timers.bIsPathReady = false; // Reset the timer
 				}
 

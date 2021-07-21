@@ -174,9 +174,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager|Agents|Limits", meta =
 		(ClampMin = 0, ClampMax = 10000, UIMin = 0, UIMax = 10000))
 	int MaxAgentCount;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager")
-	FVector TargetLocation;
 	
 protected:
 	// Called when the game starts or when spawned
@@ -218,4 +215,9 @@ private:
 	*/
 	UPROPERTY()
 	TArray<FGuid> AgentGuids;
+
+// Agent Stuff needed for various tasks. completely private
+private:
+	UPROPERTY()
+	FVector PlayerLocation;
 };

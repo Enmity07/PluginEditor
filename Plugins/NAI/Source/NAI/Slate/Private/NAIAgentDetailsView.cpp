@@ -1,6 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-#include "NAIAgentDetailsView.h"
+#include "NAI/Slate/Public/NAIAgentDetailsView.h"
 #include "NAI.h"
 #include "NAIAgentClient.h"
 
@@ -9,6 +9,7 @@
 #include "DetailWidgetRow.h"
 
 // #include "../../../../../../../../UE_4.26/Engine/Plugins/Experimental/AlembicImporter/Source/AlembicLibrary/Public/AbcFile.h"
+
 #include "Styling/SlateStyleRegistry.h"
 
 FReply FCustomAgentClientDetailsPanel::OnTestButtonClicked()
@@ -92,6 +93,7 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 	// panel. So a drop down of different categories could be used to toggle/switch
 	// between different details sections dynamicaly
 	
+	
 	// Add the custom Row
 	CustomAgentCategory.AddCustomRow(FText::FromString("Agent Settings"))
 	.WholeRowContent()
@@ -118,11 +120,68 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 			.Text(FText::FromString(TEXT("A Button")))
 			.OnClicked_Raw(this, &FCustomAgentClientDetailsPanel::OnTestButtonClicked)
 		]
+		+ SVerticalBox::Slot()
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.HAlign(HAlign_Center)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("123")))
+			]
+			+ SHorizontalBox::Slot()
+			.HAlign(HAlign_Center)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("F345")))
+			]
+			+ SHorizontalBox::Slot()
+			.HAlign(HAlign_Center)
+			[
+				SNew(SButton)
+				.Text(FText::FromString(TEXT("F34534")))
+			]
+		]
+
+		
+		+ SVerticalBox::Slot() // CreatePathToPlayer Details Section
+		.HAlign(HAlign_Center)
+		.FillHeight(true)
+		[
+			SNew(SHorizontalBox)
+			+ SHorizontalBox::Slot()
+			.FillWidth(true)
+			[
+				SNew(SBorder)
+				.HAlign(HAlign_Center)
+				.VAlign(VAlign_Center)
+				.ForegroundColor(FSlateColor(FLinearColor(0.02f, 0, 1, 1)))
+				.BorderBackgroundColor(FSlateColor(FLinearColor(0, 0, 0, 1)))
+				.ColorAndOpacity(FLinearColor(0.02f, 0, 1, 1))
+				[
+					SNew(SBox)
+					.MinDesiredWidth(175)	// to enforce some minimum width, ideally we define the minimum, not a fixed width
+					.HeightOverride(250)
+					[
+						SAssignNew(PathToPlayerInformation, STextBlock)
+						.Text(FText::FromString(TEXT(
+							"Information About this type of Ageghghfghfghfghfghfghnt.\n"
+							"This is a test of tsomdddddddddddddddddddddddddddddddddd\n"
+							"4523W34dddddddddddddddddddddddddddddddddddddddddddddgggg\n"
+							"dfgghgjhjlkl;ddddddddddddddddddddddddddddddddddddddddddd\n"
+						)))
+						.Justification(ETextJustify::Center)
+						.ColorAndOpacity(FLinearColor(99, 255, 150, 1))
+					]
+				]
+			]
+		]	
 	];
 }
 
 void FCustomAgentClientDetailsPanel::CreatePathToPlayerDetails()
 {
+	
 }
 
 void FCustomAgentClientDetailsPanel::CreatePathToLocationDetails()

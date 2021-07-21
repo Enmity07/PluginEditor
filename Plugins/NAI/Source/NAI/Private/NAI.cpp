@@ -3,8 +3,8 @@
 #include "NAI.h"
 #include "NAIAgentClient.h"
 #include "NAIAgentManager.h"
-#include "NAIAgentDetailsView.h"
-#include "NAISlateStyleSet.h"
+#include "NAI/Slate/Public/NAISlateStyleSet.h"
+#include "NAI/Slate/Public/NAIAgentDetailsView.h"
 #include "PropertyEditorModule.h"
 
 #define LOCTEXT_NAMESPACE "FNAIModule"

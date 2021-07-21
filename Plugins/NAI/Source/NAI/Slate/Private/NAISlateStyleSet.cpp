@@ -1,6 +1,6 @@
 ﻿// Fill out your copyright notice in the Description page of Project Settings.
 
-#include "NAISlateStyleSet.h"
+#include "NAI/Slate/Public/NAISlateStyleSet.h"
 
 #include "Styling/SlateStyleRegistry.h"
 
