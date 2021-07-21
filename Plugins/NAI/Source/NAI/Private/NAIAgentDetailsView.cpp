@@ -2,18 +2,26 @@
 
 #include "NAIAgentDetailsView.h"
 #include "NAI.h"
+#include "NAIAgentClient.h"
 
 #include "DetailCategoryBuilder.h"
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
-#include "NAIAgentClient.h"
+
 // #include "../../../../../../../../UE_4.26/Engine/Plugins/Experimental/AlembicImporter/Source/AlembicLibrary/Public/AbcFile.h"
 #include "Styling/SlateStyleRegistry.h"
 
 FReply FCustomAgentClientDetailsPanel::OnTestButtonClicked()
 {
 	if(LogoImage.IsValid())
-		LogoImage->SetVisibility(EVisibility::Hidden);
+		LogoImage.Get()->SetVisibility(EVisibility::Hidden);
+
+	if(MainHorizontalBox.IsValid())
+		MainHorizontalBox.Get()->RemoveSlot(LogoImage.ToSharedRef());
+	
+	if(MainVerticalBox.IsValid())
+		MainVerticalBox.Get()->RemoveSlot(MainHorizontalBox.ToSharedRef());
+
 	return FReply::Handled();
 }
 
@@ -47,35 +55,24 @@ TSharedRef<IDetailCustomization> FCustomAgentClientDetailsPanel::MakeInstance()
 
 void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& DetailBuilder)
 {
-	/* Below is a load of example code for editing the details view.
-	 * To edit an entire category, simply hide it then create a new custom one
-	 * Use the DetailBuilder to get the properties of the class, bind the appropriate delegates,
-	 * then edit the property, again through the DetailBuilder, to get the IDetailPropertyRow
-	 * pointer, which is a pointer to the properties widget/row in the details panel,
-	 * create a custom widget for the property, which will override it's original one.
-	 * Do this property by property until you've created a full custom detail view
-	 */
-	
-	// Add a custom row to contain the logo
-	
 	// Edit the Agent Category
 	IDetailCategoryBuilder& CustomAgentCategory = DetailBuilder.EditCategory("Agent");
 	// Grab the custom Slate Style for this module
 	const ISlateStyle* SlateStyle = FSlateStyleRegistry::FindSlateStyle("NAIStyleSet");
 
-	// Get Property
-	MoveSpeedHandle = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(ANAIAgentClient, MoveSpeed));
-	check(MoveSpeedHandle.IsValid());
-	// Bind Delegate
-	MoveSpeedHandle.Get()->SetOnPropertyValueChanged(
-	FSimpleDelegate::CreateSP(this,
-		&FCustomAgentClientDetailsPanel::OnMoveSpeedPropertyChanged)
-	);
+	//// Get Property
+	//MoveSpeedHandle = DetailBuilder.GetProperty(GET_MEMBER_NAME_CHECKED(ANAIAgentClient, MoveSpeed));
+	//check(MoveSpeedHandle.IsValid());
+	//// Bind Delegate
+	//MoveSpeedHandle.Get()->SetOnPropertyValueChanged(
+	//FSimpleDelegate::CreateSP(this,
+	//	&FCustomAgentClientDetailsPanel::OnMoveSpeedPropertyChanged)
+	//);
 	
-	IDetailPropertyRow* CustomPropertyRow = DetailBuilder.EditDefaultProperty(MoveSpeedHandle);
+	//IDetailPropertyRow* CustomPropertyRow = DetailBuilder.EditDefaultProperty(MoveSpeedHandle);
 
-	float Value;
-	MoveSpeedHandle.Get()->GetValue(Value);
+	//float Value;
+	//MoveSpeedHandle.Get()->GetValue(Value);
 	
 	//CustomPropertyRow->CustomWidget()
 	//.NameContent()
@@ -89,16 +86,21 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 	//	.Text(FText::FromString(FString::SanitizeFloat(Value)))
 	//	.OnTextCommitted(this, &FCustomAgentClientDetailsPanel::OnMoveSpeedCommitted)
 	//];
+
+	// Below is an example of how to add/remove slots through a button
+	// Intended use is to be able to hide/show different sections of the details
+	// panel. So a drop down of different categories could be used to toggle/switch
+	// between different details sections dynamicaly
 	
 	// Add the custom Row
 	CustomAgentCategory.AddCustomRow(FText::FromString("Agent Settings"))
 	.WholeRowContent()
 	.VAlign(VAlign_Center)
 	[
-		SNew(SVerticalBox)
+		SAssignNew(MainVerticalBox, SVerticalBox)
 		+ SVerticalBox::Slot()
 		[
-			SNew(SHorizontalBox)
+			SAssignNew(MainHorizontalBox, SHorizontalBox)
 			+SHorizontalBox::Slot()
 			.HAlign(HAlign_Center)
 			[
@@ -117,8 +119,6 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 			.OnClicked_Raw(this, &FCustomAgentClientDetailsPanel::OnTestButtonClicked)
 		]
 	];
-	
-
 }
 
 void FCustomAgentClientDetailsPanel::CreatePathToPlayerDetails()

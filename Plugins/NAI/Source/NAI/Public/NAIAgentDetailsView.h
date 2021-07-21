@@ -24,6 +24,9 @@ class NAI_API FCustomAgentClientDetailsPanel : public IDetailCustomization
 private:
 	TArray<TWeakObjectPtr<UObject>> SelectedObjects;
 
+	TSharedPtr<SVerticalBox> MainVerticalBox;
+	TSharedPtr<SHorizontalBox> MainHorizontalBox;
+	
 	TSharedPtr<SImage> LogoImage;
 	
 	FReply OnTestButtonClicked();
