@@ -8,6 +8,8 @@
 #include "CoreMinimal.h"
 
 #include "NAIAgentClient.h"
+#include "NAIAgentSettingsGlobals.h"
+
 #include "GameFramework/Actor.h"
 #include "NAIAgentManager.generated.h"
 
@@ -39,6 +41,8 @@ USTRUCT()
 struct NAI_API FAgentProperties
 {
 	GENERATED_BODY()
+
+	EAgentType AgentType;
 	
 	float MoveSpeed;
 	float LookAtRotationRate;
@@ -188,9 +192,36 @@ public:
 	void RemoveAgent(const FGuid& Guid);
 	void UpdateAgent(const FAgent& Agent);
 	void UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints);
-	void AgentPathTask(const FGuid& Guid, const FVector& Location, const FVector& Start);
+	void AgentPathTaskAsync(
+		const FGuid& Guid,
+		const FVector& Location,
+		const FVector& Start
+	);
 
 private:
+	FORCEINLINE FVector GetAgentGoalLocationFromType(
+		const EAgentType& AgentType,
+		const FVector& PlayerLocation) const
+	{
+		switch(AgentType)
+        {
+        case EAgentType::PathToPlayer:
+        	return PlayerLocation;
+        case EAgentType::PathToLocation:
+        	break;
+        case EAgentType::Static:
+        	break;
+        case EAgentType::Dynamic:
+        	break;
+        case EAgentType::FollowCustomPath:
+        	break;
+        default:
+        	break;
+        }
+        
+        return FVector();
+	}
+	
 	void Initialize();
 	
 private:
@@ -215,9 +246,4 @@ private:
 	*/
 	UPROPERTY()
 	TArray<FGuid> AgentGuids;
-
-// Agent Stuff needed for various tasks. completely private
-private:
-	UPROPERTY()
-	FVector PlayerLocation;
 };

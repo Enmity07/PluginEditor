@@ -15,7 +15,7 @@ ANAIAgentManager::ANAIAgentManager()
 	WorldRef = nullptr;
 	NavSysRef = nullptr;
 	NavDataRef = nullptr;
-	
+	 
 	PrimaryActorTick.bCanEverTick = true;
 }
 
@@ -28,27 +28,6 @@ void ANAIAgentManager::BeginPlay()
 }
 
 #undef MAX_AGENT_PRE_ALLOC
-
-void ANAIAgentManager::Initialize()
-{
-	if(WorldRef == nullptr)
-		WorldRef = GetWorld();
-	if(WorldRef)
-	{
-		if(NavSysRef == nullptr)
-		{
-			NavSysRef = UNavigationSystemV1::GetCurrent(WorldRef);
-			if(NavDataRef == nullptr && NavSysRef)
-			{
-				NavDataRef = NavSysRef->MainNavData;
-				if(NavQueryRef == nullptr && NavDataRef)
-				{
-					NavQueryRef.operator=(UNavigationQueryFilter::GetQueryFilter<UNavigationQueryFilter>(*NavDataRef));
-				}
-			}	
-		}	
-	}
-}
 
 // Called every frame
 void ANAIAgentManager::Tick(float DeltaTime)
@@ -82,7 +61,15 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Kick of an Async Path Task if the agent is ready for one
 				if(Agent.Timers.bIsPathReady)
 				{
-					AgentPathTask(Guid, PlayerLocation, AgentLocation);
+					// Get the Goal Location from the agent type
+					// the pathfinding can be radically different between types
+					// so GetAgentGoalLocationFromType() determines what vector we need
+					// for the async pathfinding task
+					const FVector PlayerLocation = FVector(); // TODO: GET THE PLAYER!!!
+					const EAgentType AgentType = Agent.AgentProperties.AgentType;
+					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
+					
+					AgentPathTaskAsync(Guid, GoalLocation, AgentLocation); // start the task
 					Agent.Timers.bIsPathReady = false; // Reset the timer
 				}
 
@@ -136,7 +123,7 @@ void ANAIAgentManager::RemoveAgent(const FGuid& Guid)
 void ANAIAgentManager::UpdateAgent(const FAgent& Agent)
 {
 	// The Add() function for the TMap replaces copies
-	// So if the Agent already exists in the map it will
+	// So if the Agent guid already exists in the map it will
 	// get overwritten with this new one
 	AgentMap.Add(Agent.Guid, Agent);
 }
@@ -146,7 +133,7 @@ void ANAIAgentManager::UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathP
 	AgentMap[Guid].UpdatePathPoints(PathPoints);
 }
 
-void ANAIAgentManager::AgentPathTask(const FGuid& Guid, const FVector& Location, const FVector& Start)
+void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Location, const FVector& Start)
 {
 	FPathFindingQuery PathfindingQuery;
 	PathfindingQuery.EndLocation = Location;
@@ -160,4 +147,25 @@ void ANAIAgentManager::AgentPathTask(const FGuid& Guid, const FVector& Location,
 		AgentMap[Guid].NavPathQueryDelegate,
 		EPathFindingMode::Regular
 	);
+}
+
+void ANAIAgentManager::Initialize()
+{
+	if(WorldRef == nullptr)
+		WorldRef = GetWorld();
+	if(WorldRef)
+	{
+		if(NavSysRef == nullptr)
+		{
+			NavSysRef = UNavigationSystemV1::GetCurrent(WorldRef);
+			if(NavDataRef == nullptr && NavSysRef)
+			{
+				NavDataRef = NavSysRef->MainNavData;
+				if(NavQueryRef == nullptr && NavDataRef)
+				{
+					NavQueryRef.operator=(UNavigationQueryFilter::GetQueryFilter<UNavigationQueryFilter>(*NavDataRef));
+				}
+			}	
+		}	
+	}
 }

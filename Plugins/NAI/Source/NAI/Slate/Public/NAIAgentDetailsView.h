@@ -4,19 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "IDetailCustomization.h"
+#include "Widgets/Input/SSpinBox.h"
 
-enum class EAgentType : uint8
-{
-	PathToPlayer UMETA(DisplayName = "PathToPlayer"),
-	PathToLocation UMETA(DisplayName = "PathToLocation"),
-	FollowCustomPath UMETA(DisplayName = "FollowCustomPath"),
-};
-
-enum class EAgentPathToLocationType : uint8
-{
-	Static UMETA(DisplayName = "StaticLocation"),
-	Dynamic UMETA(DisplayName = "DynamicLocation"),
-};
+#include "NAIAgentSettingsGlobals.h"
 
 // Custom details view for the AgentClient class
 class NAI_API FCustomAgentClientDetailsPanel : public IDetailCustomization
@@ -32,6 +22,7 @@ private:
 	FReply OnTestButtonClicked();
 
 	TSharedPtr<STextBlock> PathToPlayerInformation;
+	// TSharedPtr<SSpinBox<uint16>> SpinBoxTest;
 	
 	// ----------------------------
 	// Class Property Customization

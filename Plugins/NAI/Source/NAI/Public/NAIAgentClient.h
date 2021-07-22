@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "NAIAgentSettingsGlobals.h"
+
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "NAIAgentClient.generated.h"
@@ -20,6 +22,10 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Agent")
+	EAgentType AgentType;
+	
 	UPROPERTY(EditAnywhere)
 	class ANAIAgentManager *AgentManagerVariable;
 	

@@ -22,7 +22,8 @@ ANAIAgentClient::ANAIAgentClient()
 	SkeletalMeshComponent->SetupAttachment(CapsuleComponent);
 	SkeletalMeshComponent->SetReceivesDecals(false);
 	SkeletalMeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
-	
+
+	AgentType = EAgentType::PathToPlayer;
 	MoveSpeed = 50.0f;
 
 	MoveTickInterval = 0.033f;
@@ -56,6 +57,7 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentManager = AgentManager;
 
 		// Set the agents properties
+		Agent.AgentProperties.AgentType = AgentType;
 		Agent.AgentProperties.MoveSpeed = MoveSpeed;
 		Agent.AgentProperties.LookAtRotationRate = LookAtRotationRate;
 		// Set the actual tick rate to be an amount in seconds

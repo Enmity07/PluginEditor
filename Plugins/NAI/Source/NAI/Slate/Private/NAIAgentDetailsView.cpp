@@ -175,8 +175,24 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 					]
 				]
 			]
-		]	
+		]
+
+
+		+ SVerticalBox::Slot()
+		.HAlign(HAlign_Center)
+		[
+			SNew(SSpinBox<uint16>)
+			.MinValue(1)
+			.MaxValue(500)
+			.Value(50)
+			//.OnValueChanged_Lambda(
+			//	[this](uint16 InValue) { NewFaderStartingAddress = InValue; }
+			//)
+			.MinDesiredWidth(60.0f)
+		]
 	];
+
+	// SpinBoxTest.Get()->SetValue(5);
 }
 
 void FCustomAgentClientDetailsPanel::CreatePathToPlayerDetails()
