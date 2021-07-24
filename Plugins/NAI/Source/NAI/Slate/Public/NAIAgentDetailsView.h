@@ -22,7 +22,7 @@ private:
 	FReply OnTestButtonClicked();
 
 	TSharedPtr<STextBlock> PathToPlayerInformation;
-	// TSharedPtr<SSpinBox<uint16>> SpinBoxTest;
+	TSharedPtr<SSpinBox<uint16>> SpinBoxTest;
 	
 	// ----------------------------
 	// Class Property Customization

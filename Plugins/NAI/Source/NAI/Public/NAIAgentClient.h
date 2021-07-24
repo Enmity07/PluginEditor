@@ -46,8 +46,13 @@ public:
 		(ClampMin = "0", ClampMax = 144, UIMin = 0, UIMax = 144))
 	float AvoidanceTickInterval;
 	
-	void PathDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
+	void PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
+	void OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
+	void OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
+	void OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
+	
+	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent")
 	float Speed;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent")
@@ -66,4 +71,22 @@ private:
 	
 	UPROPERTY()
 	class ANAIAgentManager *AgentManager;
+	
+	UPROPERTY()
+	class UWorld *WorldRef;
+
+	FORCEINLINE bool CheckIfBlockedByAgent(const FTraceDatum Actors) const
+	{
+		for(int i = 0; i < Actors.OutHits.Num(); i++)
+		{
+			if(Actors.OutHits[i].Actor.Get()->IsValidLowLevelFast())
+			{
+				if(Actors.OutHits[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 };

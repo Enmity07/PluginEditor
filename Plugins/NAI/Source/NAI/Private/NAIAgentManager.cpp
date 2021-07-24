@@ -2,9 +2,11 @@
 
 #include "NAIAgentManager.h"
 #include "NAIAgentClient.h"
+#include "Engine/CollisionProfile.h"
 
 #include "Kismet/KismetMathLibrary.h"
 
+#define NULL_VECTOR FVector(125.0f, 420.0f, 317.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
 
 // Sets default values
@@ -33,6 +35,19 @@ void ANAIAgentManager::BeginPlay()
 void ANAIAgentManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	TArray<TSharedPtr<FName>> ProfileNames;
+	UCollisionProfile::GetProfileNames(ProfileNames);
+	if(ProfileNames.Num() > 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("---Start---"));
+		for(int i = 0; i < ProfileNames.Num(); i++)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("Name: %s"), *ProfileNames[i].Get()->ToString());
+		}
+		UE_LOG(LogTemp, Warning, TEXT("---End---"));
+	}
+
 	
 	if(WorldRef)
 	{
@@ -148,6 +163,93 @@ void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Loca
 		EPathFindingMode::Regular
 	);
 }
+
+//FTraceHandle UWorld::AsyncLineTraceByObjectType(
+//    EAsyncTraceType InTraceType, 
+//    const FVector& Start, 
+//    const FVector& End, 
+//    const FCollisionObjectQueryParams& ObjectQueryParams, 
+//    const FCollisionQueryParams& Params /* = FCollisionQueryParams::DefaultQueryParam */, 
+//    FTraceDelegate* InDelegate/* =NULL */, 
+//    uint32 UserData /* = 0 */)
+//{
+//	return StartNewTrace(AsyncTraceState, FTraceDatum(this, FCollisionShape::LineShape, Params, FCollisionResponseParams::DefaultResponseParam, ObjectQueryParams, DefaultCollisionChannel, UserData, InTraceType, Start, End, FQuat::Identity, InDelegate, AsyncTraceState.CurrentFrame));
+//}
+// FTraceHandle	AsyncLineTraceByChannel(
+//    EAsyncTraceType InTraceType,
+//	  const FVector&
+//	  Start,const FVector& End,
+//	  ECollisionChannel TraceChannel,
+//	  const FCollisionQueryParams& Params = FCollisionQueryParams::DefaultQueryParam,
+//	  const FCollisionResponseParams& ResponseParam = FCollisionResponseParams::DefaultResponseParam,
+//	  FTraceDelegate * InDelegate=NULL, uint32 UserData = 0
+//);
+
+
+void ANAIAgentManager::AgentTraceTaskAsync(
+	const FGuid& Guid, const FVector& Start, const FVector& End, const EAgentRaytraceDirection& Direction)
+{
+	// Get the required delegate
+	FTraceDelegate TraceDirectionDelegate;
+	switch(Direction)
+	{
+		case EAgentRaytraceDirection::TracingFront:
+			TraceDirectionDelegate = AgentMap[Guid].RaytraceFrontDelegate;
+			break;
+		case EAgentRaytraceDirection::TracingLeft:
+			TraceDirectionDelegate = AgentMap[Guid].RaytraceLeftDelegate;
+			break;
+		case EAgentRaytraceDirection::TracingRight:
+			TraceDirectionDelegate = AgentMap[Guid].RaytraceRightDelegate;
+			break;
+		default:
+			break;
+	}
+
+	//FCollisionObjectQueryParams ObjectQueryParams;
+	
+	//WorldRef->AsyncLineTraceByObjectType(
+	//	EAsyncTraceType::Single,
+	//	Start,
+	//	End,
+	//	,
+	//	FCollisionResponseParams::DefaultResponseParam,
+	//	&TraceDirectionDelegate
+	//	
+	//);
+	
+	WorldRef->AsyncLineTraceByChannel(
+		EAsyncTraceType::Single,
+		Start,
+		End,
+		ECollisionChannel::ECC_Pawn, // TODO: Don't forget this
+		FCollisionQueryParams::DefaultQueryParam,
+		FCollisionResponseParams::DefaultResponseParam,
+		&TraceDirectionDelegate
+	);
+}
+
+FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentType, const FVector& PlayerLocation) const
+{
+	switch(AgentType)
+	{
+		case EAgentType::PathToPlayer:
+			return PlayerLocation;
+		case EAgentType::PathToLocation:
+			return NULL_VECTOR;
+		case EAgentType::Static:
+			return NULL_VECTOR;
+		case EAgentType::Dynamic:
+			return NULL_VECTOR;
+		case EAgentType::FollowCustomPath:
+			return NULL_VECTOR;
+		default:
+			return NULL_VECTOR;
+	}
+	// this is unreachable since the switch only returns and never breaks
+}
+
+#undef NULL_VECTOR
 
 void ANAIAgentManager::Initialize()
 {

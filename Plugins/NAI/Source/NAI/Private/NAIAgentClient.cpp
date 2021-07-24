@@ -72,8 +72,11 @@ void ANAIAgentClient::BeginPlay()
 		
 		Agent.bIsHalted = false;
 
-		// Bind the PathDelegate function to the Async Navigation Query
-		Agent.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathDelegate);
+		// Bind the PathCompleteDelegate function to the Async Navigation Query
+		Agent.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathCompleteDelegate);
+		Agent.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
+		Agent.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
+		Agent.RaytraceLeftDelegate.BindUObject(this, &ANAIAgentClient::OnLeftTraceCompleted);
 		
 		// Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
@@ -81,7 +84,7 @@ void ANAIAgentClient::BeginPlay()
 }
 
 // Local Delegate which is called when an Async pathfinding request has completed for this agent
-void ANAIAgentClient::PathDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
+void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
 {
 	if(ResultType == ENavigationQueryResult::Success)
 	{	
@@ -91,4 +94,22 @@ void ANAIAgentClient::PathDelegate(uint32 PathId, ENavigationQueryResult::Type R
 			AgentManager->UpdateAgentPath(Guid, PathPoints);
 		}
 	}
+}
+
+void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
+{
+	if(!WorldRef->IsTraceHandleValid(Handle, false) || Data.OutHits.Num() < 1)
+		return;
+	
+	// Check if we hit an agent
+	bool bIsBlocked = CheckIfBlockedByAgent(Data);
+}
+
+void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
+{
+}
+
+void ANAIAgentClient::OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
+{
+	
 }

@@ -14,13 +14,11 @@
 #include "NAIAgentManager.generated.h"
 
 UENUM()
-enum class EAgentTaskType : uint8
+enum class EAgentRaytraceDirection : uint8
 {
-	Pathfinding UMETA(DisplayName = "Pathfinding"),
 	TracingFront UMETA(DisplayName = "TracingFront"),
 	TracingLeft UMETA(DisplayName = "TracingLeft"),
 	TracingRight UMETA(DisplayName = "TracingRight"),
-	Default UMETA(DisplayName = "Default"),
 };
 
 USTRUCT()
@@ -197,30 +195,18 @@ public:
 		const FVector& Location,
 		const FVector& Start
 	);
+	void AgentTraceTaskAsync(
+		const FGuid& Guid, 
+		const FVector& Start,
+		const FVector& End,
+		const EAgentRaytraceDirection& Direction
+	);
 
 private:
+	// TODO: Not sure why i inlined this.. implement it properly
 	FORCEINLINE FVector GetAgentGoalLocationFromType(
 		const EAgentType& AgentType,
-		const FVector& PlayerLocation) const
-	{
-		switch(AgentType)
-        {
-        case EAgentType::PathToPlayer:
-        	return PlayerLocation;
-        case EAgentType::PathToLocation:
-        	break;
-        case EAgentType::Static:
-        	break;
-        case EAgentType::Dynamic:
-        	break;
-        case EAgentType::FollowCustomPath:
-        	break;
-        default:
-        	break;
-        }
-        
-        return FVector();
-	}
+		const FVector& PlayerLocation) const;
 	
 	void Initialize();
 	
