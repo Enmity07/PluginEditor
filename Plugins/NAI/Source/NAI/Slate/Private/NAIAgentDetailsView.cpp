@@ -7,9 +7,6 @@
 #include "DetailCategoryBuilder.h"
 #include "DetailLayoutBuilder.h"
 #include "DetailWidgetRow.h"
-
-// #include "../../../../../../../../UE_4.26/Engine/Plugins/Experimental/AlembicImporter/Source/AlembicLibrary/Public/AbcFile.h"
-
 #include "Styling/SlateStyleRegistry.h"
 
 FReply FCustomAgentClientDetailsPanel::OnTestButtonClicked()

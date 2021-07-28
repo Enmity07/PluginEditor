@@ -36,17 +36,17 @@ void ANAIAgentManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	TArray<TSharedPtr<FName>> ProfileNames;
-	UCollisionProfile::GetProfileNames(ProfileNames);
-	if(ProfileNames.Num() > 0)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("---Start---"));
-		for(int i = 0; i < ProfileNames.Num(); i++)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Name: %s"), *ProfileNames[i].Get()->ToString());
-		}
-		UE_LOG(LogTemp, Warning, TEXT("---End---"));
-	}
+	//TArray<TSharedPtr<FName>> ProfileNames;
+	//UCollisionProfile::GetProfileNames(ProfileNames);
+	//if(ProfileNames.Num() > 0)
+	//{
+	//	UE_LOG(LogTemp, Warning, TEXT("---Start---"));
+	//	for(int i = 0; i < ProfileNames.Num(); i++)
+	//	{
+	//		UE_LOG(LogTemp, Warning, TEXT("Name: %s"), *ProfileNames[i].Get()->ToString());
+	//	}
+	//	UE_LOG(LogTemp, Warning, TEXT("---End---"));
+	//}
 
 	
 	if(WorldRef)
@@ -56,8 +56,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		{
 			for(int i = 0; i < AgentCount; i++)
 			{
-				
-				// Get the next Guid and use it to get a copy of the agent
+				// Get the Guid and use it to get a copy of the agent
 				const FGuid Guid = AgentGuids[i];
 				FAgent Agent = AgentMap[Guid];
 
@@ -72,23 +71,38 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		        {
 		            continue;
 		        }
-		            
+
 				// Kick of an Async Path Task if the agent is ready for one
-				if(Agent.Timers.bIsPathReady)
+				if(Agent.Timers.PathTime.bIsReady)
 				{
 					// Get the Goal Location from the agent type
 					// the pathfinding can be radically different between types
 					// so GetAgentGoalLocationFromType() determines what vector we need
 					// for the async pathfinding task
-					const FVector PlayerLocation = FVector(); // TODO: GET THE PLAYER!!!
+					const FVector PlayerLocation = FVector(AgentLocation.X + 500.0f, AgentLocation.Y, AgentLocation.Z); // TODO: GET THE PLAYER!!!
 					const EAgentType AgentType = Agent.AgentProperties.AgentType;
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
 					
 					AgentPathTaskAsync(Guid, GoalLocation, AgentLocation); // start the task
-					Agent.Timers.bIsPathReady = false; // Reset the timer
+					Agent.Timers.PathTime.Reset(); // Reset the timer
 				}
 
-				if(Agent.Timers.bIsMoveReady)
+				// Kick off an Async Trace Task if the agent is ready for one
+				if(Agent.Timers.TraceTime.bIsReady)
+				{
+					AgentTraceTaskAsync(
+						Guid,
+						AgentLocation,
+						Agent.AgentClient->GetActorForwardVector(),
+						Agent.AgentClient->GetActorRightVector(),
+						Agent.AgentProperties
+					);
+					
+					Agent.Timers.TraceTime.Reset();
+				}
+				
+				// Handle the movement/rotation of the agent for this frame
+				if(Agent.Timers.MoveTime.bIsReady)
 				{
 					// No reason to move if we don't have a path
 					if(Agent.CurrentPath.Num() > 1) // Need more than 1 path point to for it to be a path
@@ -112,7 +126,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						);
 					}
 					
-					Agent.Timers.bIsMoveReady = false;
+					Agent.Timers.MoveTime.Reset();
 				}
 			}
 		}
@@ -148,7 +162,7 @@ void ANAIAgentManager::UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathP
 	AgentMap[Guid].UpdatePathPoints(PathPoints);
 }
 
-void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Location, const FVector& Start)
+void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Location, const FVector& Start) const
 {
 	FPathFindingQuery PathfindingQuery;
 	PathfindingQuery.EndLocation = Location;
@@ -164,69 +178,67 @@ void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Loca
 	);
 }
 
-//FTraceHandle UWorld::AsyncLineTraceByObjectType(
-//    EAsyncTraceType InTraceType, 
-//    const FVector& Start, 
-//    const FVector& End, 
-//    const FCollisionObjectQueryParams& ObjectQueryParams, 
-//    const FCollisionQueryParams& Params /* = FCollisionQueryParams::DefaultQueryParam */, 
-//    FTraceDelegate* InDelegate/* =NULL */, 
-//    uint32 UserData /* = 0 */)
-//{
-//	return StartNewTrace(AsyncTraceState, FTraceDatum(this, FCollisionShape::LineShape, Params, FCollisionResponseParams::DefaultResponseParam, ObjectQueryParams, DefaultCollisionChannel, UserData, InTraceType, Start, End, FQuat::Identity, InDelegate, AsyncTraceState.CurrentFrame));
-//}
-// FTraceHandle	AsyncLineTraceByChannel(
-//    EAsyncTraceType InTraceType,
-//	  const FVector&
-//	  Start,const FVector& End,
-//	  ECollisionChannel TraceChannel,
-//	  const FCollisionQueryParams& Params = FCollisionQueryParams::DefaultQueryParam,
-//	  const FCollisionResponseParams& ResponseParam = FCollisionResponseParams::DefaultResponseParam,
-//	  FTraceDelegate * InDelegate=NULL, uint32 UserData = 0
-//);
-
-
 void ANAIAgentManager::AgentTraceTaskAsync(
-	const FGuid& Guid, const FVector& Start, const FVector& End, const EAgentRaytraceDirection& Direction)
+	const FGuid& Guid, const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
+	const FAgentProperties& AgentProperties) const
 {
-	// Get the required delegate
-	FTraceDelegate TraceDirectionDelegate;
-	switch(Direction)
+	// Get the delegate for forward traces
+	FTraceDelegate TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
 	{
-		case EAgentRaytraceDirection::TracingFront:
-			TraceDirectionDelegate = AgentMap[Guid].RaytraceFrontDelegate;
-			break;
-		case EAgentRaytraceDirection::TracingLeft:
-			TraceDirectionDelegate = AgentMap[Guid].RaytraceLeftDelegate;
-			break;
-		case EAgentRaytraceDirection::TracingRight:
-			TraceDirectionDelegate = AgentMap[Guid].RaytraceRightDelegate;
-			break;
-		default:
-			break;
+		const uint8 Columns = AgentProperties.AvoidanceProperties.GridColumns;
+		const uint8 Rows = AgentProperties.AvoidanceProperties.GridRows;
+
+		// Get the starting point.. Looks nasty but it's to ensure the variable can be const
+		const FVector StartingPoint =
+			(AgentLocation +
+				(Forward * (AgentProperties.CapsuleRadius + 1.0f)) + // X
+				(Right * AgentProperties.AvoidanceProperties.GridHalfWidth) + // Y
+				(FVector(0.0f, 0.0f, 1.0f) * AgentProperties.AvoidanceProperties.GridHalfHeight) // Z
+			);
+
+		FVector CurrentStartPoint = StartingPoint;
+		FVector CurrentEndPoint = StartingPoint + (Forward * 50.0f);
+		
+		// Do front traces
+		for(uint8 i = 0; i < Rows; i++)
+		{		
+			for(uint8 j = 0; j < Columns; j++)
+			{
+				CurrentStartPoint =
+					(StartingPoint +
+						((-Right * AgentProperties.AvoidanceProperties.WidthIncrementSize) * j) + // Y
+						((FVector(0.0f, 0.0f, -1.0f) * AgentProperties.AvoidanceProperties.GridHalfHeight) * i) // Z
+					);
+				CurrentEndPoint = CurrentStartPoint + (Forward * 50.0f);
+				
+				WorldRef->AsyncLineTraceByChannel(
+					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Visibility,
+					FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+					&TraceDirectionDelegate
+				);
+			}
+		}
 	}
 
-	//FCollisionObjectQueryParams ObjectQueryParams;
+
+	uint8 Columns = AgentProperties.AvoidanceProperties.SideColumns;
+	uint8 Rows = AgentProperties.AvoidanceProperties.SideRows;
 	
-	//WorldRef->AsyncLineTraceByObjectType(
+	// Do Side trace
+	for(uint8 i = 0; i < Rows; i++)
+	{
+			
+	}
+
+	//WorldRef->AsyncLineTraceByChannel(
 	//	EAsyncTraceType::Single,
 	//	Start,
 	//	End,
-	//	,
+	//	ECollisionChannel::ECC_Visibility, // TODO: Don't forget this ... UPDATE: I haven't forgot
+	//	FCollisionQueryParams::DefaultQueryParam,
 	//	FCollisionResponseParams::DefaultResponseParam,
 	//	&TraceDirectionDelegate
-	//	
 	//);
-	
-	WorldRef->AsyncLineTraceByChannel(
-		EAsyncTraceType::Single,
-		Start,
-		End,
-		ECollisionChannel::ECC_Pawn, // TODO: Don't forget this
-		FCollisionQueryParams::DefaultQueryParam,
-		FCollisionResponseParams::DefaultResponseParam,
-		&TraceDirectionDelegate
-	);
 }
 
 FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentType, const FVector& PlayerLocation) const
@@ -243,10 +255,9 @@ FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentTy
 			return NULL_VECTOR;
 		case EAgentType::FollowCustomPath:
 			return NULL_VECTOR;
-		default:
-			return NULL_VECTOR;
 	}
-	// this is unreachable since the switch only returns and never breaks
+	// We only get here if the AgentType was null 
+	return NULL_VECTOR;
 }
 
 #undef NULL_VECTOR

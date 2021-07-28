@@ -22,7 +22,6 @@ protected:
 	virtual void BeginPlay() override;
 
 public:
-
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Agent")
 	EAgentType AgentType;
 	
@@ -37,14 +36,17 @@ public:
 	float LookAtRotationRate;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-			(ClampMin = "0", ClampMax = 144, UIMin = 0, UIMax = 144))
+			(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
 	float MoveTickInterval;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-			(ClampMin = "0", ClampMax = 144, UIMin = 0, UIMax = 144))
+			(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
 	float PathfindingTickInterval;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-		(ClampMin = "0", ClampMax = 144, UIMin = 0, UIMax = 144))
+		(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
 	float AvoidanceTickInterval;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent")
+	EAgentAvoidanceLevel AvoidanceLevel;
 	
 	void PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
@@ -74,19 +76,4 @@ private:
 	
 	UPROPERTY()
 	class UWorld *WorldRef;
-
-	FORCEINLINE bool CheckIfBlockedByAgent(const FTraceDatum Actors) const
-	{
-		for(int i = 0; i < Actors.OutHits.Num(); i++)
-		{
-			if(Actors.OutHits[i].Actor.Get()->IsValidLowLevelFast())
-			{
-				if(Actors.OutHits[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
-				{
-					return true;
-				}
-			}
-		}
-		return false;
-	}
 };

@@ -22,18 +22,175 @@ enum class EAgentRaytraceDirection : uint8
 };
 
 USTRUCT()
+struct NAI_API FAgentTimedProperty
+{
+	GENERATED_BODY()
+
+	float TickRate;
+	float Time;
+	uint8 bIsReady : 1;
+
+	// Default initialization. Really important bIsReady == true fpr how
+	// the plugin works
+	FAgentTimedProperty() { TickRate = 1.0f; Time = 0.0f; bIsReady = true; }
+
+	FORCEINLINE void Reset() { Time = 0.0f; bIsReady = false; }
+	// Add time only is bIsReady == false
+	FORCEINLINE void AddTime(const float InTime)
+	{
+		if(!bIsReady)
+		{
+			if(Time >= TickRate)
+			{
+				bIsReady = true;
+				Time = 0.0f;
+			}
+			else
+			{
+				Time += InTime;
+			}
+		}
+	}
+	// Always add time
+	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
+};
+
+USTRUCT()
+struct NAI_API FAgentAvoidanceResultTimers
+{
+	GENERATED_BODY()
+	
+	FAgentTimedProperty Forward;
+	FAgentTimedProperty Right;
+	FAgentTimedProperty Left;
+};
+
+USTRUCT()
 struct NAI_API FAgentTimers
 {
 	GENERATED_BODY()
 
-	float MoveTime;
-	float PathTime;
-	float TraceTime;
-
-	uint8 bIsMoveReady : 1;
-	uint8 bIsPathReady : 1;
-	uint8 bIsTraceReady : 1;
+	FAgentTimedProperty MoveTime;
+	FAgentTimedProperty PathTime;
+	FAgentTimedProperty TraceTime;
+	
+	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
+
+// TODO: Get rid of this mess by making everything proportional
+// to the agent's size
+#define NORMAL_AVOIDANCE_COLUMNS		3
+#define ADVANCED_AVOIDANCE_COLUMNS		5
+#define AVOIDANCE_SIDE_COLUMNS			1
+#define NORMAL_AVOIDANCE_ROWS			3
+#define ADVANCED_AVOIDANCE_ROWS			5
+#define AVOIDANCE_WIDTH_MULTIPLIER		1.5f
+#define AVOIDANCE_HEIGHT_MULTIPLIER		0.8f
+
+USTRUCT()
+struct NAI_API FAgentAvoidanceTaskTraceParams
+{
+	GENERATED_BODY()
+
+	FVector Start;
+	FVector End;
+};
+
+USTRUCT()
+struct NAI_API FAgentAsyncAvoidanceTask
+{
+	GENERATED_BODY()
+	
+	FTraceDelegate TraceDelegate;
+	TArray<FAgentAvoidanceTaskTraceParams> GridElements;
+};
+
+USTRUCT()
+struct NAI_API FAgentAvoidanceTaskResults
+{
+	GENERATED_BODY()
+
+	uint8 bHasForwardResult : 1;
+	uint8 bHasRightResult : 1;
+	uint8 bHasLeftResult : 1;
+	
+	FAgentAvoidanceTaskResults()
+	{
+		bHasForwardResult = false;
+		bHasRightResult = false;
+		bHasLeftResult = false;
+		
+		bForwardBlocked = false;
+		bRightBlocked = false;
+		bLeftBlocked = false;
+	}
+	
+	FORCEINLINE void SetForwardBlocked(const bool InForwardBlocked)
+	{ bForwardBlocked = InForwardBlocked; }
+	FORCEINLINE void SetRightBlocked(const bool InRightBlocked)
+	{ bRightBlocked = InRightBlocked; }
+	FORCEINLINE void SetLeftBlocked(const bool InLeftBlocked)
+	{ bLeftBlocked = InLeftBlocked; }
+	FORCEINLINE bool GetForwardBlocked() { return bForwardBlocked; }
+	FORCEINLINE bool GetRightBlocked() { return bRightBlocked; }
+	FORCEINLINE bool GetLeftBlocked() { return bLeftBlocked; }
+
+private:
+	uint8 bForwardBlocked : 1;
+	uint8 bRightBlocked : 1;
+	uint8 bLeftBlocked : 1;
+};
+
+USTRUCT()
+struct NAI_API FAgentAvoidanceProperties
+{
+	GENERATED_BODY()
+
+	EAgentAvoidanceLevel AvoidanceLevel;
+	float GridWidth;
+	float GridHalfWidth;
+	float GridHeight;
+	float GridHalfHeight;
+
+	uint8 GridColumns;
+	uint8 GridRows;
+	uint8 SideColumns;
+	uint8 SideRows;
+
+	float WidthIncrementSize;
+	float HeightIncrementSize;
+	
+	FORCEINLINE void Initialize(
+		const EAgentAvoidanceLevel& InAvoidanceLevel,
+		const float InRadius,
+		const float InHalfHeight)
+	{
+		AvoidanceLevel = InAvoidanceLevel;
+		GridWidth = InRadius * AVOIDANCE_WIDTH_MULTIPLIER;
+		GridHalfWidth = GridWidth * 0.5;
+		GridHeight = InHalfHeight * AVOIDANCE_HEIGHT_MULTIPLIER;
+		GridHalfHeight = GridHeight * 0.5f;
+
+		GridColumns = (AvoidanceLevel == EAgentAvoidanceLevel::Normal)
+					? (NORMAL_AVOIDANCE_COLUMNS) : (ADVANCED_AVOIDANCE_COLUMNS);
+		GridRows = (AvoidanceLevel == EAgentAvoidanceLevel::Normal)
+					? (NORMAL_AVOIDANCE_ROWS) : (ADVANCED_AVOIDANCE_ROWS);
+
+		SideColumns = AVOIDANCE_SIDE_COLUMNS;
+		SideRows = GridRows;
+
+		// TODO: Try get rid of division here
+		WidthIncrementSize = GridWidth / GridColumns;
+		HeightIncrementSize = GridHeight / GridRows;
+	}
+};
+
+#undef NORMAL_AVOIDANCE_COLUMNS
+#undef ADVANCED_AVOIDANCE_COLUMNS
+#undef AVOIDANCE_SIDE_COLUMNS
+#undef NORMAL_AVOIDANCE_ROWS
+#undef ADVANCED_AVOIDANCE_ROWS
+#undef AVOIDANCE_WIDTH_MULTIPLIER
 
 USTRUCT()
 struct NAI_API FAgentProperties
@@ -41,13 +198,19 @@ struct NAI_API FAgentProperties
 	GENERATED_BODY()
 
 	EAgentType AgentType;
+
+	float CapsuleRadius;
+	float CapsuleHalfHeight;
 	
 	float MoveSpeed;
 	float LookAtRotationRate;
+
+	// Async Raytracing
+	FTraceDelegate RaytraceFrontDelegate;
+	FTraceDelegate RaytraceRightDelegate;
+	FTraceDelegate RaytraceLeftDelegate;
 	
-	float MoveTickRate;
-	float PathfindingTickRate;
-	float TracingTickRate;
+	FAgentAvoidanceProperties AvoidanceProperties;
 };
 
 class AAgentManager;
@@ -79,11 +242,13 @@ struct NAI_API FAgent
 	// Current navigation path as an array of vectors
 	TArray<FNavPathPoint> CurrentPath;
 
-	// Async Raytracing
-	FTraceDelegate RaytraceFrontDelegate;
-	FTraceDelegate RaytraceRightDelegate;
-	FTraceDelegate RaytraceLeftDelegate;
-
+	// The latest results for Each Avoidance Trace direction
+	// Timers for the age of each directions trace results are stored
+	// in the Timers variable under the AvoidanceResults variable.
+	// We don't want to use the data from a given direction if it's old..
+	// ...this should only be relevant when the frame rate is very low
+	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
+	
 	// Object that contains the timers
 	FAgentTimers Timers;
 
@@ -95,10 +260,9 @@ private:
 	FVector PositionLastFrame;
 	
 public:
-
 	// Whether or not this agent is halted
 	uint8 bIsHalted : 1;
-
+	
 	FORCEINLINE void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
@@ -112,44 +276,12 @@ public:
 	// Won't update a timer if it has already ticked fully but hasn't been used yet
 	FORCEINLINE void UpdateTimers(const float DeltaTime)
 	{
-		if(!Timers.bIsMoveReady)
-		{
-			if(Timers.MoveTime >= AgentProperties.MoveTickRate)
-			{
-				Timers.bIsMoveReady = true;
-				Timers.MoveTime = 0.0f;
-			}
-			else
-			{
-				Timers.MoveTime += DeltaTime;
-			}
-		}
-
-		if(!Timers.bIsPathReady)
-		{
-			if(Timers.PathTime >= AgentProperties.PathfindingTickRate)
-			{
-				Timers.bIsPathReady = true;
-				Timers.PathTime = 0.0f;
-			}
-			else
-			{
-				Timers.PathTime += DeltaTime;
-			}
-		}
-
-		if(!Timers.bIsTraceReady)
-		{
-			if(Timers.TraceTime >= AgentProperties.TracingTickRate)
-			{
-				Timers.bIsTraceReady = true;
-				Timers.TraceTime = 0.0f;
-			}
-			else
-			{
-				Timers.TraceTime += DeltaTime;
-			}
-		}
+		Timers.MoveTime.AddTime(DeltaTime);
+		Timers.PathTime.AddTime(DeltaTime);
+		Timers.TraceTime.AddTime(DeltaTime);
+		Timers.AvoidanceResultAgeTimers.Forward.AddTimeRaw(DeltaTime);
+		Timers.AvoidanceResultAgeTimers.Right.AddTimeRaw(DeltaTime);
+		Timers.AvoidanceResultAgeTimers.Left.AddTimeRaw(DeltaTime);
 	}
 
 	FORCEINLINE void CalculateAndUpdateSpeed(
@@ -162,6 +294,11 @@ public:
 		Speed = Distance / DeltaTime;
 		AgentClient->Speed = Speed;
 	}
+
+	FORCEINLINE void CreateNewTraceTask()
+	{
+		// PositionThisFrame negates the need to take the agents location as a param
+	}
 };
 
 UCLASS(BlueprintType)
@@ -173,6 +310,9 @@ public:
 	// Sets default values for this actor's properties
 	ANAIAgentManager();
 
+	UPROPERTY(EditAnywhere)
+	TSubclassOf<AActor> PlayerClass;
+	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager|Agents|Limits", meta =
 		(ClampMin = 0, ClampMax = 10000, UIMin = 0, UIMax = 10000))
 	int MaxAgentCount;
@@ -194,13 +334,14 @@ public:
 		const FGuid& Guid,
 		const FVector& Location,
 		const FVector& Start
-	);
+	) const;
 	void AgentTraceTaskAsync(
 		const FGuid& Guid, 
-		const FVector& Start,
-		const FVector& End,
-		const EAgentRaytraceDirection& Direction
-	);
+		const FVector& AgentLocation,
+		const FVector& Forward,
+		const FVector& Right,
+		const FAgentProperties& AvoidanceProperties
+	) const;
 
 private:
 	// TODO: Not sure why i inlined this.. implement it properly

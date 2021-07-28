@@ -1,10 +1,14 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "NAIAgentClient.h"
+
+#include "DrawDebugHelpers.h"
 #include "NAIAgentManager.h"
 
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+
+
 
 // Sets default values
 ANAIAgentClient::ANAIAgentClient()
@@ -16,6 +20,7 @@ ANAIAgentClient::ANAIAgentClient()
 	CapsuleComponent->AreaClass = nullptr;
 	CapsuleComponent->SetCollisionProfileName(TEXT("AgentClient"));
 	CapsuleComponent->SetReceivesDecals(false);
+	CapsuleComponent->PrimaryComponentTick.bCanEverTick = false;
 	RootComponent = CapsuleComponent;
 	
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>("SkeletalMesh");
@@ -31,9 +36,12 @@ ANAIAgentClient::ANAIAgentClient()
 	AvoidanceTickInterval = 0.3f;
 	
 	AgentManager = nullptr;
+	WorldRef = nullptr;
 	
 	bFindCameraComponentWhenViewTarget = false;
 	bBlockInput = true;
+	
+	PrimaryActorTick.bCanEverTick = false;
 }
 
 // Called when the game starts or when spawned
@@ -43,6 +51,9 @@ void ANAIAgentClient::BeginPlay()
 
 	if(AgentManagerVariable)
 		AgentManager = AgentManagerVariable;
+
+	if(WorldRef == nullptr)
+		WorldRef = GetWorld();
 	
 	if(AgentManager)
 	{
@@ -55,28 +66,30 @@ void ANAIAgentClient::BeginPlay()
 		Agent.Guid = Guid;
 		Agent.AgentClient = this;
 		Agent.AgentManager = AgentManager;
-
 		// Set the agents properties
 		Agent.AgentProperties.AgentType = AgentType;
+		Agent.AgentProperties.CapsuleRadius = CapsuleComponent->GetUnscaledCapsuleRadius();
+		Agent.AgentProperties.CapsuleHalfHeight = CapsuleComponent->GetUnscaledCapsuleHalfHeight();
 		Agent.AgentProperties.MoveSpeed = MoveSpeed;
 		Agent.AgentProperties.LookAtRotationRate = LookAtRotationRate;
-		// Set the actual tick rate to be an amount in seconds
-		Agent.AgentProperties.MoveTickRate = MoveTickInterval;
-		Agent.AgentProperties.PathfindingTickRate = PathfindingTickInterval;
-		Agent.AgentProperties.TracingTickRate = AvoidanceTickInterval;
+		Agent.Timers.MoveTime.TickRate = MoveTickInterval;
+		Agent.Timers.PathTime.TickRate = PathfindingTickInterval;
+		Agent.Timers.TraceTime.TickRate = AvoidanceTickInterval;
 
-		// Timer settings
-		Agent.Timers.bIsMoveReady = true;
-		Agent.Timers.bIsPathReady = true;
-		Agent.Timers.bIsTraceReady = true;
-		
+		// Setup avoidance settings
+		Agent.AgentProperties.AvoidanceProperties.Initialize(
+			AvoidanceLevel,
+			CapsuleComponent->GetUnscaledCapsuleRadius(),
+			CapsuleComponent->GetUnscaledCapsuleHalfHeight()
+		);
+
 		Agent.bIsHalted = false;
 
 		// Bind the PathCompleteDelegate function to the Async Navigation Query
 		Agent.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathCompleteDelegate);
-		Agent.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
-		Agent.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
-		Agent.RaytraceLeftDelegate.BindUObject(this, &ANAIAgentClient::OnLeftTraceCompleted);
+		Agent.AgentProperties.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
+		Agent.AgentProperties.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
+		Agent.AgentProperties.RaytraceLeftDelegate.BindUObject(this, &ANAIAgentClient::OnLeftTraceCompleted);
 		
 		// Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
@@ -98,11 +111,38 @@ void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult
 
 void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	if(!WorldRef->IsTraceHandleValid(Handle, false) || Data.OutHits.Num() < 1)
+	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
 		return;
 	
-	// Check if we hit an agent
-	bool bIsBlocked = CheckIfBlockedByAgent(Data);
+	for(int i = 0; i < Data.OutHits.Num(); i++)
+	{
+		if(Data.OutHits[i].Actor.Get()->IsValidLowLevelFast())
+		{
+			if(Data.OutHits[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+			{
+				if(Guid != Cast<ANAIAgentClient>(Data.OutHits[i].Actor.Get())->Guid)
+				{
+					// If we got here then it means with DID hit an agent, and it WAS NOT this one
+		
+					
+					break; // Don't need to check any others since only one needs to be in the way
+				}
+			}
+		} 
+	}
+	if(WorldRef)
+	{
+		DrawDebugLine(
+			WorldRef,
+			Data.Start,
+			Data.End,
+			FColor(255, 0, 0),
+			false,
+			2,
+			0,
+			2.0f
+		);
+	}
 }
 
 void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
