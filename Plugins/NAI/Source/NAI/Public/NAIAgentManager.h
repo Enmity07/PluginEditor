@@ -140,6 +140,7 @@ private:
 	uint8 bRightBlocked : 1;
 	uint8 bLeftBlocked : 1;
 };
+#define UP_VECTOR FVector(0.0f, 0.0f, 1.0f)
 
 USTRUCT()
 struct NAI_API FAgentAvoidanceProperties
@@ -159,6 +160,8 @@ struct NAI_API FAgentAvoidanceProperties
 
 	float WidthIncrementSize;
 	float HeightIncrementSize;
+	float StartOffsetWidth;
+	FVector StartOffsetHeightVector;
 	
 	FORCEINLINE void Initialize(
 		const EAgentAvoidanceLevel& InAvoidanceLevel,
@@ -167,8 +170,8 @@ struct NAI_API FAgentAvoidanceProperties
 	{
 		AvoidanceLevel = InAvoidanceLevel;
 		GridWidth = InRadius * AVOIDANCE_WIDTH_MULTIPLIER;
-		GridHalfWidth = GridWidth * 0.5;
-		GridHeight = InHalfHeight * AVOIDANCE_HEIGHT_MULTIPLIER;
+		GridHalfWidth = GridWidth * 0.5f;
+		GridHeight = (InHalfHeight * 2.0f) * AVOIDANCE_HEIGHT_MULTIPLIER;
 		GridHalfHeight = GridHeight * 0.5f;
 
 		GridColumns = (AvoidanceLevel == EAgentAvoidanceLevel::Normal)
@@ -182,8 +185,13 @@ struct NAI_API FAgentAvoidanceProperties
 		// TODO: Try get rid of division here
 		WidthIncrementSize = GridWidth / GridColumns;
 		HeightIncrementSize = GridHeight / GridRows;
+
+		StartOffsetWidth = WidthIncrementSize * ((GridColumns - 1.0f) * 0.5f);
+		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1.0f) * 0.5f));
 	}
 };
+
+#undef UP_VECTOR
 
 #undef NORMAL_AVOIDANCE_COLUMNS
 #undef ADVANCED_AVOIDANCE_COLUMNS

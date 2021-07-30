@@ -113,17 +113,17 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						const FVector Direction = UKismetMathLibrary::GetDirectionUnitVector(Start, End);
 						const FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
 						// Set the new location and sweep for collision
-						Agent.AgentClient->SetActorLocation(NewLoc, true);
+						//Agent.AgentClient->SetActorLocation(NewLoc, true);
 
 						// Turn the agent to face the direction it's moving in
 						const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
-						Agent.AgentClient->SetActorRotation(
-							FMath::Lerp(
-								Agent.AgentClient->GetActorRotation(),
-								LookAtRotation,
-								Agent.AgentProperties.LookAtRotationRate
-							)
-						);
+						//Agent.AgentClient->SetActorRotation(
+						//	FMath::Lerp(
+						//		Agent.AgentClient->GetActorRotation(),
+						//		LookAtRotation,
+						//		Agent.AgentProperties.LookAtRotationRate
+						//	)
+						//);
 					}
 					
 					Agent.Timers.MoveTime.Reset();
@@ -182,33 +182,35 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 	const FGuid& Guid, const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
 	const FAgentProperties& AgentProperties) const
 {
+	const float WidthIncrementSize = AgentProperties.AvoidanceProperties.WidthIncrementSize;
+	const float HeightIncrementSize = AgentProperties.AvoidanceProperties.HeightIncrementSize;
+
+	const float StartOffsetWidth = AgentProperties.AvoidanceProperties.StartOffsetWidth;
+	// Height is already done since the vector is always the same
+	const FVector StartOffsetHeightVector = AgentProperties.AvoidanceProperties.StartOffsetHeightVector;
+	
 	// Get the delegate for forward traces
 	FTraceDelegate TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
 	{
 		const uint8 Columns = AgentProperties.AvoidanceProperties.GridColumns;
 		const uint8 Rows = AgentProperties.AvoidanceProperties.GridRows;
 
-		// Get the starting point.. Looks nasty but it's to ensure the variable can be const
-		const FVector StartingPoint =
-			(AgentLocation +
-				(Forward * (AgentProperties.CapsuleRadius + 1.0f)) + // X
-				(Right * AgentProperties.AvoidanceProperties.GridHalfWidth) + // Y
-				(FVector(0.0f, 0.0f, 1.0f) * AgentProperties.AvoidanceProperties.GridHalfHeight) // Z
-			);
+		const FVector ForwardOffset = Forward * (AgentProperties.CapsuleRadius + 1.0f);
+		const FVector RightOffset = Right * StartOffsetWidth;
 
-		FVector CurrentStartPoint = StartingPoint;
-		FVector CurrentEndPoint = StartingPoint + (Forward * 50.0f);
+		// Get the starting point.. 
+		const FVector StartingPoint = ((AgentLocation + ForwardOffset) + RightOffset) +	StartOffsetHeightVector;
+	
+		FVector CurrentStartPoint;
+		FVector CurrentEndPoint;
 		
 		// Do front traces
 		for(uint8 i = 0; i < Rows; i++)
 		{		
 			for(uint8 j = 0; j < Columns; j++)
 			{
-				CurrentStartPoint =
-					(StartingPoint +
-						((-Right * AgentProperties.AvoidanceProperties.WidthIncrementSize) * j) + // Y
-						((FVector(0.0f, 0.0f, -1.0f) * AgentProperties.AvoidanceProperties.GridHalfHeight) * i) // Z
-					);
+				CurrentStartPoint = StartingPoint + ((-Right * WidthIncrementSize) * j) +
+						((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
 				CurrentEndPoint = CurrentStartPoint + (Forward * 50.0f);
 				
 				WorldRef->AsyncLineTraceByChannel(
@@ -220,25 +222,41 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 		}
 	}
 
-
-	uint8 Columns = AgentProperties.AvoidanceProperties.SideColumns;
-	uint8 Rows = AgentProperties.AvoidanceProperties.SideRows;
 	
-	// Do Side trace
-	for(uint8 i = 0; i < Rows; i++)
 	{
-			
-	}
+		const uint8 Columns = AgentProperties.AvoidanceProperties.SideColumns;
+		const uint8 Rows = AgentProperties.AvoidanceProperties.SideRows;
+	
+		TraceDirectionDelegate = AgentProperties.RaytraceLeftDelegate;
 
-	//WorldRef->AsyncLineTraceByChannel(
-	//	EAsyncTraceType::Single,
-	//	Start,
-	//	End,
-	//	ECollisionChannel::ECC_Visibility, // TODO: Don't forget this ... UPDATE: I haven't forgot
-	//	FCollisionQueryParams::DefaultQueryParam,
-	//	FCollisionResponseParams::DefaultResponseParam,
-	//	&TraceDirectionDelegate
-	//);
+		const FVector Left = -Right;
+
+		const FVector StartingPoint =
+			((AgentLocation +
+				(Left * (AgentProperties.CapsuleRadius + 1.0f)) +
+				(StartOffsetHeightVector))
+			);
+
+		FVector CurrentStartPoint;
+		FVector CurrentEndPoint;
+		
+		// Do Left trace
+		for(uint8 i = 0; i < Rows; i++)
+		{
+			for(uint8 j = 0;  j < Columns; j++)
+			{
+				CurrentStartPoint = StartingPoint + ((Forward * WidthIncrementSize) * j) +
+							((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
+				CurrentEndPoint = CurrentStartPoint + (Left * 50.0f);
+				
+				WorldRef->AsyncLineTraceByChannel(
+					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Visibility,
+					FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+					&TraceDirectionDelegate
+				);
+			}
+		}
+	}
 }
 
 FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentType, const FVector& PlayerLocation) const

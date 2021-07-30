@@ -79,7 +79,7 @@ void ANAIAgentClient::BeginPlay()
 		// Setup avoidance settings
 		Agent.AgentProperties.AvoidanceProperties.Initialize(
 			AvoidanceLevel,
-			CapsuleComponent->GetUnscaledCapsuleRadius(),
+			CapsuleComponent->GetScaledCapsuleRadius(),
 			CapsuleComponent->GetUnscaledCapsuleHalfHeight()
 		);
 
@@ -136,7 +136,7 @@ void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDa
 			WorldRef,
 			Data.Start,
 			Data.End,
-			FColor(255, 0, 0),
+			FColor(0, 255, 0),
 			false,
 			2,
 			0,
@@ -151,5 +151,20 @@ void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDa
 
 void ANAIAgentClient::OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
+	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
+		return;
 	
+	if(WorldRef)
+	{
+		DrawDebugLine(
+			WorldRef,
+			Data.Start,
+			Data.End,
+			FColor(0, 255, 0),
+			false,
+			2,
+			0,
+			2.0f
+		);
+	}
 }
