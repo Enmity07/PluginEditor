@@ -8,8 +8,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 
-
-
 // Sets default values
 ANAIAgentClient::ANAIAgentClient()
 {
@@ -90,13 +88,11 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentProperties.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
 		Agent.AgentProperties.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
 		Agent.AgentProperties.RaytraceLeftDelegate.BindUObject(this, &ANAIAgentClient::OnLeftTraceCompleted);
-		
 		// Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
 	}
 }
 
-// Local Delegate which is called when an Async pathfinding request has completed for this agent
 void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
 {
 	if(ResultType == ENavigationQueryResult::Success)
@@ -109,39 +105,20 @@ void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult
 	}
 }
 
+// TODO: These delegate functions only ended up here because we used the bind UObject function...
+// TODO: the FAgent container for each agent is where they ideally will belong
 void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
+	if(!Handle.IsValid() && AgentManager) //|| Data.OutHits.Num() < 1)
 		return;
+
+	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingFront,
+		CheckIfBlockedByAgent(Data.OutHits));
 	
-	for(int i = 0; i < Data.OutHits.Num(); i++)
-	{
-		if(Data.OutHits[i].Actor.Get()->IsValidLowLevelFast())
-		{
-			if(Data.OutHits[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
-			{
-				if(Guid != Cast<ANAIAgentClient>(Data.OutHits[i].Actor.Get())->Guid)
-				{
-					// If we got here then it means with DID hit an agent, and it WAS NOT this one
-		
-					
-					break; // Don't need to check any others since only one needs to be in the way
-				}
-			}
-		} 
-	}
 	if(WorldRef)
 	{
-		DrawDebugLine(
-			WorldRef,
-			Data.Start,
-			Data.End,
-			FColor(0, 255, 0),
-			false,
-			2,
-			0,
-			2.0f
-		);
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
 	}
 }
 
@@ -149,19 +126,14 @@ void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDa
 {
 	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
 		return;
+
+	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingRight,
+		CheckIfBlockedByAgent(Data.OutHits));
 	
 	if(WorldRef)
 	{
-		DrawDebugLine(
-			WorldRef,
-			Data.Start,
-			Data.End,
-			FColor(0, 255, 0),
-			false,
-			2,
-			0,
-			2.0f
-		);
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
 	}
 }
 
@@ -169,18 +141,33 @@ void ANAIAgentClient::OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDat
 {
 	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
 		return;
+
+	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingLeft,
+		CheckIfBlockedByAgent(Data.OutHits));
 	
 	if(WorldRef)
 	{
-		DrawDebugLine(
-			WorldRef,
-			Data.Start,
-			Data.End,
-			FColor(0, 255, 0),
-			false,
-			2,
-			0,
-			2.0f
-		);
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
 	}
+}
+
+bool ANAIAgentClient::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects)
+{
+	for(int i = 0; i < Objects.Num(); i++)
+	{
+		if(Objects[i].Actor.IsValid())
+		{
+			if(Objects[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+			{
+				// TODO: This check might not be needed since the traces should always start outside the agents collider
+				if(Guid != Cast<ANAIAgentClient>(Objects[i].Actor.Get())->Guid)
+				{
+					// If we got here then it means with DID hit an agent, and it WAS NOT this one
+					return true; // Don't need to check any others since only one needs to be in the way
+				}
+			}
+		}
+	}
+	return false;
 }

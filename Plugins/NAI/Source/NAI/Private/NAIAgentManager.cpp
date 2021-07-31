@@ -4,7 +4,7 @@
 #include "NAIAgentClient.h"
 #include "Engine/CollisionProfile.h"
 
-#include "Kismet/KismetMathLibrary.h"
+// #include "Kismet/KismetMathLibrary.h"
 
 #define NULL_VECTOR FVector(125.0f, 420.0f, 317.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
@@ -91,7 +91,6 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				if(Agent.Timers.TraceTime.bIsReady)
 				{
 					AgentTraceTaskAsync(
-						Guid,
 						AgentLocation,
 						Agent.AgentClient->GetActorForwardVector(),
 						Agent.AgentClient->GetActorRightVector(),
@@ -107,16 +106,16 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					// No reason to move if we don't have a path
 					if(Agent.CurrentPath.Num() > 1) // Need more than 1 path point to for it to be a path
 					{
-						const FVector Start = Agent.CurrentPath[0];
-						const FVector End = Agent.CurrentPath[1];
+						//const FVector Start = Agent.CurrentPath[0];
+						//const FVector End = Agent.CurrentPath[1];
 						// Get the direction in a normalized format
-						const FVector Direction = UKismetMathLibrary::GetDirectionUnitVector(Start, End);
-						const FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
+						//const FVector Direction = UKismetMathLibrary::GetDirectionUnitVector(Start, End);
+						//const FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
 						// Set the new location and sweep for collision
 						//Agent.AgentClient->SetActorLocation(NewLoc, true);
 
 						// Turn the agent to face the direction it's moving in
-						const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
+						//const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
 						//Agent.AgentClient->SetActorRotation(
 						//	FMath::Lerp(
 						//		Agent.AgentClient->GetActorRotation(),
@@ -162,6 +161,12 @@ void ANAIAgentManager::UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathP
 	AgentMap[Guid].UpdatePathPoints(PathPoints);
 }
 
+void ANAIAgentManager::UpdateAgentAvoidanceResult(const FGuid& Guid, const EAgentRaytraceDirection& TraceDirection,
+	const bool bResult)
+{
+	AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
+}
+
 void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Location, const FVector& Start) const
 {
 	FPathFindingQuery PathfindingQuery;
@@ -179,11 +184,11 @@ void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Loca
 }
 
 void ANAIAgentManager::AgentTraceTaskAsync(
-	const FGuid& Guid, const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
+	const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
 	const FAgentProperties& AgentProperties) const
 {
-	// Lambda for each trace to avoid creating another function
-	// And we can capture the variables passed to this function by reference
+	// Lambda for each trace to avoid creating another function.
+	// We can capture the variables passed to this function by reference
 	// so no need to pass them trough to another function, which would be a mess
 	auto DoTraceTask = [&](const EAgentRaytraceDirection& TraceDirectionType)
 	{
@@ -246,16 +251,11 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 
 		const FVector ForwardOffset = RelativeForward * (AgentProperties.CapsuleRadius + 1.0f);
 		const FVector RightOffset = RelativeRight * StartOffsetWidth;
-		const FVector StartingPoint = (
-			AgentLocation +
-				(RelativeForward * (AgentProperties.CapsuleRadius + 1.0f)) +
-				(RelativeRight * StartOffsetWidth) +
-				StartOffsetHeightVector
-		);
+		const FVector StartingPoint = (((AgentLocation +ForwardOffset) + RightOffset) + StartOffsetHeightVector);
 
-		for(uint8 i = 0; i < Rows; i++) // Horizontal Traces
+		for(uint8 i = 0; i < Rows; i++) // Vertical Traces
 		{
-			for(uint8 j = 0; j < Columns; j++) // Vertical Traces
+			for(uint8 j = 0; j < Columns; j++) // Horizontal Traces
 			{
 				const FVector CurrentStartPoint = StartingPoint +
 					((-RelativeRight * WidthIncrementSize) * j) +
@@ -272,6 +272,7 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 		
 	};
 
+	// Use the above lambda function to do each trace direction
 	DoTraceTask(EAgentRaytraceDirection::TracingFront);
 	DoTraceTask(EAgentRaytraceDirection::TracingLeft);
 	DoTraceTask(EAgentRaytraceDirection::TracingRight);

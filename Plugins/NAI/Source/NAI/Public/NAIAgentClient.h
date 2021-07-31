@@ -54,7 +54,6 @@ public:
 	void OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
 	
-	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent")
 	float Speed;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent")
@@ -68,6 +67,8 @@ private:
 	class USkeletalMeshComponent *SkeletalMeshComponent;
 	
 private:
+	bool CheckIfBlockedByAgent(const TArray<FHitResult>& Objects);
+	
 	UPROPERTY()
 	FGuid Guid;
 	

@@ -110,43 +110,16 @@ struct NAI_API FAgentAvoidanceTaskResults
 {
 	GENERATED_BODY()
 
-	uint8 bHasForwardResult : 1;
-	uint8 bHasRightResult : 1;
-	uint8 bHasLeftResult : 1;
-	
-	FAgentAvoidanceTaskResults()
-	{
-		bHasForwardResult = false;
-		bHasRightResult = false;
-		bHasLeftResult = false;
-		
-		bForwardBlocked = false;
-		bRightBlocked = false;
-		bLeftBlocked = false;
-	}
-	
-	FORCEINLINE void SetForwardBlocked(const bool InForwardBlocked)
-	{ bForwardBlocked = InForwardBlocked; }
-	FORCEINLINE void SetRightBlocked(const bool InRightBlocked)
-	{ bRightBlocked = InRightBlocked; }
-	FORCEINLINE void SetLeftBlocked(const bool InLeftBlocked)
-	{ bLeftBlocked = InLeftBlocked; }
-	FORCEINLINE bool GetForwardBlocked() { return bForwardBlocked; }
-	FORCEINLINE bool GetRightBlocked() { return bRightBlocked; }
-	FORCEINLINE bool GetLeftBlocked() { return bLeftBlocked; }
-
-private:
 	uint8 bForwardBlocked : 1;
 	uint8 bRightBlocked : 1;
 	uint8 bLeftBlocked : 1;
 };
+
 #define UP_VECTOR FVector(0.0f, 0.0f, 1.0f)
 
 USTRUCT()
 struct NAI_API FAgentAvoidanceProperties
 {
-	
-
 	GENERATED_BODY()
 
 	EAgentAvoidanceLevel AvoidanceLevel;
@@ -323,6 +296,25 @@ public:
 		CurrentPath = Points;
 	}
 
+	FORCEINLINE void UpdateAvoidanceResult(const EAgentRaytraceDirection& InDirection, const bool bInResult)
+	{
+		switch(InDirection)
+		{
+			case EAgentRaytraceDirection::TracingFront:
+				LatestAvoidanceTaskResults.bForwardBlocked = bInResult;
+				Timers.AvoidanceResultAgeTimers.Forward.Reset();
+				break;
+			case EAgentRaytraceDirection::TracingLeft:
+				LatestAvoidanceTaskResults.bLeftBlocked = bInResult;
+				Timers.AvoidanceResultAgeTimers.Left.Reset();
+				break;
+			case EAgentRaytraceDirection::TracingRight:
+				LatestAvoidanceTaskResults.bRightBlocked = bInResult;
+				Timers.AvoidanceResultAgeTimers.Right.Reset();
+				break;
+		}
+	}
+	
 	// Update the Timer settings for each agent using the passed in DeltaTime
 	// Won't update a timer if it has already ticked fully but hasn't been used yet
 	FORCEINLINE void UpdateTimers(const float DeltaTime)
@@ -376,20 +368,23 @@ public:
 	void RemoveAgent(const FGuid& Guid);
 	void UpdateAgent(const FAgent& Agent);
 	void UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints);
+	void UpdateAgentAvoidanceResult(
+		const FGuid& Guid,
+		const EAgentRaytraceDirection& TraceDirection,
+		const bool bResult);
+private:
 	void AgentPathTaskAsync(
 		const FGuid& Guid,
 		const FVector& Location,
 		const FVector& Start
 	) const;
-	void AgentTraceTaskAsync(
-		const FGuid& Guid, 
+	void AgentTraceTaskAsync( 
 		const FVector& AgentLocation,
 		const FVector& Forward,
 		const FVector& Right,
 		const FAgentProperties& AvoidanceProperties
 	) const;
-
-private:
+	
 	// TODO: Not sure why i inlined this.. implement it properly
 	FORCEINLINE FVector GetAgentGoalLocationFromType(
 		const EAgentType& AgentType,
