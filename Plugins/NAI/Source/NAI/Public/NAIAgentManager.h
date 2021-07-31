@@ -145,6 +145,8 @@ private:
 USTRUCT()
 struct NAI_API FAgentAvoidanceProperties
 {
+	
+
 	GENERATED_BODY()
 
 	EAgentAvoidanceLevel AvoidanceLevel;
@@ -159,10 +161,20 @@ struct NAI_API FAgentAvoidanceProperties
 	uint8 SideRows;
 
 	float WidthIncrementSize;
+	float SideWidthIncrementSize;
 	float HeightIncrementSize;
 	float StartOffsetWidth;
+	float SideStartOffsetWidth;
 	FVector StartOffsetHeightVector;
-	
+	FVector SideStartOffsetHeightVector;
+
+	/// <summary>
+	///	Initialize this type and set up/calculate
+	///	the grid columns/rows, along with various offsets.
+	/// </summary>
+	/// <param name="InAvoidanceLevel">The Avoidance level of the Agent.</param>
+	/// <param name="InRadius">The Radius of the Agent's collider.</param>
+	/// <param name="InHalfHeight">The Half Height of the Agent's collider.</param>
 	FORCEINLINE void Initialize(
 		const EAgentAvoidanceLevel& InAvoidanceLevel,
 		const float InRadius,
@@ -184,10 +196,41 @@ struct NAI_API FAgentAvoidanceProperties
 
 		// TODO: Try get rid of division here
 		WidthIncrementSize = GridWidth / GridColumns;
+		SideWidthIncrementSize = (GridWidth * 0.5f) / SideColumns; // use half grid width for the sides
 		HeightIncrementSize = GridHeight / GridRows;
 
 		StartOffsetWidth = WidthIncrementSize * ((GridColumns - 1.0f) * 0.5f);
+		SideStartOffsetWidth = WidthIncrementSize * ((SideColumns - 1.0f) * 0.5f);
 		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1.0f) * 0.5f));
+		SideStartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((SideRows - 1.0f) * 0.5f));
+	}
+
+	/// <summary>
+	///	Override of the = operator for this type.
+	/// </summary>
+	/// <param name="Other">The input variable taken by reference.</param>
+	FAgentAvoidanceProperties& operator=(const FAgentAvoidanceProperties& Other)
+	{
+		if (this == &Other)
+			return *this;
+		AvoidanceLevel = Other.AvoidanceLevel;
+		GridWidth = Other.GridWidth;
+		GridHalfWidth = Other.GridHalfWidth;
+		GridHeight = Other.GridHeight;
+		GridHalfHeight = Other.GridHalfHeight;
+		GridColumns = Other.GridColumns;
+		GridRows = Other.GridRows;
+		SideColumns = Other.SideColumns;
+		SideRows = Other.SideRows;
+		WidthIncrementSize = Other.WidthIncrementSize;
+		SideWidthIncrementSize = Other.SideWidthIncrementSize;
+		HeightIncrementSize = Other.HeightIncrementSize;
+		StartOffsetWidth = Other.StartOffsetWidth;
+		SideStartOffsetWidth = Other.SideStartOffsetWidth;
+		StartOffsetHeightVector = Other.StartOffsetHeightVector;
+		SideStartOffsetHeightVector = Other.SideStartOffsetHeightVector;
+		
+		return *this;
 	}
 };
 
@@ -301,11 +344,6 @@ public:
 		const float Distance = FNAICalculator::Distance(PositionThisFrame, PositionLastFrame);
 		Speed = Distance / DeltaTime;
 		AgentClient->Speed = Speed;
-	}
-
-	FORCEINLINE void CreateNewTraceTask()
-	{
-		// PositionThisFrame negates the need to take the agents location as a param
 	}
 };
 

@@ -147,6 +147,22 @@ void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDa
 
 void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
+	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
+		return;
+	
+	if(WorldRef)
+	{
+		DrawDebugLine(
+			WorldRef,
+			Data.Start,
+			Data.End,
+			FColor(0, 255, 0),
+			false,
+			2,
+			0,
+			2.0f
+		);
+	}
 }
 
 void ANAIAgentClient::OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)

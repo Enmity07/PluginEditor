@@ -182,73 +182,86 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 	const FGuid& Guid, const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
 	const FAgentProperties& AgentProperties) const
 {
-	const float WidthIncrementSize = AgentProperties.AvoidanceProperties.WidthIncrementSize;
-	const float HeightIncrementSize = AgentProperties.AvoidanceProperties.HeightIncrementSize;
-
-	const float StartOffsetWidth = AgentProperties.AvoidanceProperties.StartOffsetWidth;
-	// Height is already done since the vector is always the same
-	const FVector StartOffsetHeightVector = AgentProperties.AvoidanceProperties.StartOffsetHeightVector;
-	
-	// Get the delegate for forward traces
-	FTraceDelegate TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
+	// Lambda for each trace to avoid creating another function
+	// And we can capture the variables passed to this function by reference
+	// so no need to pass them trough to another function, which would be a mess
+	auto DoTraceTask = [&](const EAgentRaytraceDirection& TraceDirectionType)
 	{
-		const uint8 Columns = AgentProperties.AvoidanceProperties.GridColumns;
-		const uint8 Rows = AgentProperties.AvoidanceProperties.GridRows;
+		FTraceDelegate TraceDirectionDelegate;
+		FVector RelativeForward;
+		FVector RelativeRight;
 
-		const FVector ForwardOffset = Forward * (AgentProperties.CapsuleRadius + 1.0f);
-		const FVector RightOffset = Right * StartOffsetWidth;
+		const uint8 Columns = (TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
+			(AgentProperties.AvoidanceProperties.GridColumns) :
+			(AgentProperties.AvoidanceProperties.SideColumns);
 
-		// Get the starting point.. 
-		const FVector StartingPoint = ((AgentLocation + ForwardOffset) + RightOffset) +	StartOffsetHeightVector;
-	
-		FVector CurrentStartPoint;
-		FVector CurrentEndPoint;
+		const uint8 Rows = (TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
+			(AgentProperties.AvoidanceProperties.GridRows) :
+			(AgentProperties.AvoidanceProperties.SideRows)
+		;
 		
-		// Do front traces
-		for(uint8 i = 0; i < Rows; i++)
-		{		
-			for(uint8 j = 0; j < Columns; j++)
-			{
-				CurrentStartPoint = StartingPoint + ((-Right * WidthIncrementSize) * j) +
-						((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
-				CurrentEndPoint = CurrentStartPoint + (Forward * 50.0f);
-				
-				WorldRef->AsyncLineTraceByChannel(
-					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Visibility,
-					FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
-					&TraceDirectionDelegate
-				);
-			}
-		}
-	}
-
-	
-	{
-		const uint8 Columns = AgentProperties.AvoidanceProperties.SideColumns;
-		const uint8 Rows = AgentProperties.AvoidanceProperties.SideRows;
-	
-		TraceDirectionDelegate = AgentProperties.RaytraceLeftDelegate;
-
-		const FVector Left = -Right;
-
-		const FVector StartingPoint =
-			((AgentLocation +
-				(Left * (AgentProperties.CapsuleRadius + 1.0f)) +
-				(StartOffsetHeightVector))
-			);
-
-		FVector CurrentStartPoint;
-		FVector CurrentEndPoint;
+		const float WidthIncrementSize =
+			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
+				(AgentProperties.AvoidanceProperties.WidthIncrementSize) :
+				(AgentProperties.AvoidanceProperties.SideWidthIncrementSize)
+		;
 		
-		// Do Left trace
-		for(uint8 i = 0; i < Rows; i++)
+		const float HeightIncrementSize = AgentProperties.AvoidanceProperties.HeightIncrementSize;
+		
+		const float StartOffsetWidth =
+			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
+				(AgentProperties.AvoidanceProperties.StartOffsetWidth) :
+				(AgentProperties.AvoidanceProperties.SideStartOffsetWidth)
+		;
+
+		// We don't need to calculate the Height every time like the width,
+		// since the "up" vector is always the same amount in the Z axis,
+		// so the height is precalculated in the Initialize() function of the
+		// FAgentAvoidanceProperties struct in NAIAgentManager.h
+		const FVector StartOffsetHeightVector =
+			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
+				(AgentProperties.AvoidanceProperties.StartOffsetHeightVector) :
+				(AgentProperties.AvoidanceProperties.SideStartOffsetHeightVector)
+		;
+		
+		switch(TraceDirectionType)
 		{
-			for(uint8 j = 0;  j < Columns; j++)
-			{
-				CurrentStartPoint = StartingPoint + ((Forward * WidthIncrementSize) * j) +
-							((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
-				CurrentEndPoint = CurrentStartPoint + (Left * 50.0f);
+			case EAgentRaytraceDirection::TracingFront:
 				
+				TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
+				RelativeForward = Forward;
+				RelativeRight = Right;
+				break;
+			case EAgentRaytraceDirection::TracingLeft:
+				TraceDirectionDelegate = AgentProperties.RaytraceLeftDelegate;
+				RelativeForward = -Right;
+				RelativeRight = -Forward;
+				break;
+			case EAgentRaytraceDirection::TracingRight:
+				TraceDirectionDelegate = AgentProperties.RaytraceRightDelegate;
+				RelativeForward = Right;
+				RelativeRight = Forward;
+				break;
+		}
+
+		const FVector ForwardOffset = RelativeForward * (AgentProperties.CapsuleRadius + 1.0f);
+		const FVector RightOffset = RelativeRight * StartOffsetWidth;
+		const FVector StartingPoint = (
+			AgentLocation +
+				(RelativeForward * (AgentProperties.CapsuleRadius + 1.0f)) +
+				(RelativeRight * StartOffsetWidth) +
+				StartOffsetHeightVector
+		);
+
+		for(uint8 i = 0; i < Rows; i++) // Horizontal Traces
+		{
+			for(uint8 j = 0; j < Columns; j++) // Vertical Traces
+			{
+				const FVector CurrentStartPoint = StartingPoint +
+					((-RelativeRight * WidthIncrementSize) * j) +
+					((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
+				const FVector CurrentEndPoint = CurrentStartPoint + (RelativeForward * 50.0f);
+
 				WorldRef->AsyncLineTraceByChannel(
 					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Visibility,
 					FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
@@ -256,7 +269,12 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 				);
 			}
 		}
-	}
+		
+	};
+
+	DoTraceTask(EAgentRaytraceDirection::TracingFront);
+	DoTraceTask(EAgentRaytraceDirection::TracingLeft);
+	DoTraceTask(EAgentRaytraceDirection::TracingRight);
 }
 
 FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentType, const FVector& PlayerLocation) const
