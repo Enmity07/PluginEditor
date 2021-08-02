@@ -1,8 +1,11 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "NAIAgentManager.h"
+
+#include "DrawDebugHelpers.h"
 #include "NAIAgentClient.h"
 #include "Engine/CollisionProfile.h"
+#include "Kismet/KismetMathLibrary.h"
 
 // #include "Kismet/KismetMathLibrary.h"
 
@@ -30,6 +33,10 @@ void ANAIAgentManager::BeginPlay()
 }
 
 #undef MAX_AGENT_PRE_ALLOC
+
+// If this is enabled with a lot of agents active in the game
+// it will crash the editor so use it with caution 
+#define ENABLE_DEBUG_DRAW_LINE true
 
 // Called every frame
 void ANAIAgentManager::Tick(float DeltaTime)
@@ -79,14 +86,29 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					// the pathfinding can be radically different between types
 					// so GetAgentGoalLocationFromType() determines what vector we need
 					// for the async pathfinding task
-					const FVector PlayerLocation = FVector(AgentLocation.X + 500.0f, AgentLocation.Y, AgentLocation.Z); // TODO: GET THE PLAYER!!!
+					const FVector PlayerLocation = GetActorLocation(); // TODO: GET THE PLAYER!!!
 					const EAgentType AgentType = Agent.AgentProperties.AgentType;
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
 					
-					AgentPathTaskAsync(Guid, GoalLocation, AgentLocation); // start the task
+					AgentPathTaskAsync(AgentLocation, GoalLocation, Agent.AgentProperties.NavigationProperties); // start the task
 					Agent.Timers.PathTime.Reset(); // Reset the timer
 				}
 
+				if(Agent.Timers.FloorCheckTime.bIsReady)
+				{
+					const FVector StartPoint = FVector(
+						AgentLocation.X, AgentLocation.Y, (AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
+					const FVector EndPoint = StartPoint - (FVector(0.0f, 0.0f, 1.0f) * 100.0f);
+					
+					WorldRef->AsyncLineTraceByChannel(
+						EAsyncTraceType::Single, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
+						FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+						&Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate
+					);
+					
+					Agent.Timers.PathTime.Reset();
+				}
+				
 				// Kick off an Async Trace Task if the agent is ready for one
 				if(Agent.Timers.TraceTime.bIsReady)
 				{
@@ -106,27 +128,42 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					// No reason to move if we don't have a path
 					if(Agent.CurrentPath.Num() > 1) // Need more than 1 path point to for it to be a path
 					{
-						//const FVector Start = Agent.CurrentPath[0];
-						//const FVector End = Agent.CurrentPath[1];
+						// Calculate the new FVector for this move update
+						const FVector Start = Agent.CurrentPath[0];
+						const FVector End = Agent.CurrentPath[1];
+#if (ENABLE_DEBUG_DRAW_LINE)
+						DrawDebugLine(WorldRef, Start, End, FColor(0, 255, 0),
+                        	false, 2, 0, 2.0f);
+#endif
 						// Get the direction in a normalized format
-						//const FVector Direction = UKismetMathLibrary::GetDirectionUnitVector(Start, End);
-						//const FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
-						// Set the new location and sweep for collision
-						//Agent.AgentClient->SetActorLocation(NewLoc, true);
+						const FVector Direction = (End - Start).GetSafeNormal();
+						FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
+						
+						NewLoc = NewLoc -
+							(FVector(0.0f, 0.0f, 1.0f) *
+								(Agent.AgentProperties.MoveSpeed * Agent.AgentClient->DownwardOffsetForce * DeltaTime)
+							);
+						const FVector MoveDelta = NewLoc - AgentLocation;
 
-						// Turn the agent to face the direction it's moving in
-						//const FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
-						//Agent.AgentClient->SetActorRotation(
-						//	FMath::Lerp(
-						//		Agent.AgentClient->GetActorRotation(),
-						//		LookAtRotation,
-						//		Agent.AgentProperties.LookAtRotationRate
-						//	)
-						//);
+						// Calculate our new rotation
+						FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
+						LookAtRotation.Roll	= 0.0f; LookAtRotation.Pitch = 0.0f;
+						const FRotator LerpRotation = FMath::Lerp(Agent.AgentClient->GetActorRotation(),
+							LookAtRotation, Agent.AgentProperties.LookAtRotationRate
+						);
+
+						// We directly move the agent by moving it's root component as it avoids a shit load
+						// of unnecessary wrapper functions, along with extra GetActorLocation() function calls
+						// when we already have the agents location in this scope, before we finally get to this function
+						// so we're directly calling it here instead of SetActorLocation() / SetActorRotation()
+						Agent.AgentClient->GetRootComponent()->MoveComponent(MoveDelta, LerpRotation, true);
 					}
 					
 					Agent.Timers.MoveTime.Reset();
 				}
+
+				// Update the agent in the map to apply the changes we've made this tick
+				AgentMap[Guid] = Agent;
 			}
 		}
 	}
@@ -135,6 +172,8 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		Initialize();
 	}
 }
+
+#undef ENABLE_DEBUG_DRAW_LINE
 
 void ANAIAgentManager::AddAgent(const FAgent& Agent)
 {	
@@ -156,29 +195,19 @@ void ANAIAgentManager::UpdateAgent(const FAgent& Agent)
 	AgentMap.Add(Agent.Guid, Agent);
 }
 
-void ANAIAgentManager::UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints)
-{
-	AgentMap[Guid].UpdatePathPoints(PathPoints);
-}
-
-void ANAIAgentManager::UpdateAgentAvoidanceResult(const FGuid& Guid, const EAgentRaytraceDirection& TraceDirection,
-	const bool bResult)
-{
-	AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
-}
-
-void ANAIAgentManager::AgentPathTaskAsync(const FGuid& Guid, const FVector& Location, const FVector& Start) const
+void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& Goal,
+                                          const FAgentNavigationProperties& NavigationProperties) const
 {
 	FPathFindingQuery PathfindingQuery;
-	PathfindingQuery.EndLocation = Location;
 	PathfindingQuery.StartLocation = Start;
+	PathfindingQuery.EndLocation = Goal;
 	PathfindingQuery.QueryFilter = NavQueryRef;
 	PathfindingQuery.NavData = NavDataRef;
-
+	
 	NavSysRef->FindPathAsync(
-		AgentMap[Guid].NavAgentProperties,
+		NavigationProperties.NavAgentProperties,
 		PathfindingQuery,
-		AgentMap[Guid].NavPathQueryDelegate,
+		NavigationProperties.NavPathQueryDelegate,
 		EPathFindingMode::Regular
 	);
 }
@@ -195,6 +224,11 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 		FTraceDelegate TraceDirectionDelegate;
 		FVector RelativeForward;
 		FVector RelativeRight;
+
+		// Initialize everything...
+		// We check the TraceDirectionType several times instead of using an if statement for all of them,
+		// because we want the variables to be const. The compiler will optimize out the multiple identical
+		// condition checks anyway
 
 		const uint8 Columns = (TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
 			(AgentProperties.AvoidanceProperties.GridColumns) :
@@ -269,7 +303,6 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 				);
 			}
 		}
-		
 	};
 
 	// Use the above lambda function to do each trace direction

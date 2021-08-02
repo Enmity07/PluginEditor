@@ -73,7 +73,16 @@ void ANAIAgentClient::BeginPlay()
 		Agent.Timers.MoveTime.TickRate = MoveTickInterval;
 		Agent.Timers.PathTime.TickRate = PathfindingTickInterval;
 		Agent.Timers.TraceTime.TickRate = AvoidanceTickInterval;
+		Agent.Timers.FloorCheckTime.TickRate = 0.1f;
 
+		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentRadius =
+			Agent.AgentProperties.CapsuleRadius;
+		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentHeight =
+			(Agent.AgentProperties.CapsuleHalfHeight * 2.0f);
+		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanFly = false;
+		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanJump = false;
+		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanSwim = false;
+		
 		// Setup avoidance settings
 		Agent.AgentProperties.AvoidanceProperties.Initialize(
 			AvoidanceLevel,
@@ -84,13 +93,63 @@ void ANAIAgentClient::BeginPlay()
 		Agent.bIsHalted = false;
 
 		// Bind the PathCompleteDelegate function to the Async Navigation Query
-		Agent.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathCompleteDelegate);
+		Agent.AgentProperties.NavigationProperties.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathCompleteDelegate);
+		Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate.BindUObject(this, &ANAIAgentClient::OnFloorCheckTraceComplete);
 		Agent.AgentProperties.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
 		Agent.AgentProperties.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
 		Agent.AgentProperties.RaytraceLeftDelegate.BindUObject(this, &ANAIAgentClient::OnLeftTraceCompleted);
 		// Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
 	}
+}
+
+#define ENABLE_DEBUG_DRAW_LINE true
+#define ENABLE_DEBUG_PRINT_SCREEN true
+
+void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
+{
+	if(!Handle.IsValid() || !AgentManager)
+		return;
+
+#if (ENABLE_DEBUG_PRINT_SCREEN)
+	if(GEngine)
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Total number of hits: %d"),
+			Data.OutHits.Num()));
+#endif
+#if (ENABLE_DEBUG_DRAW_LINE)
+	if(WorldRef)
+	{
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
+	}
+#endif
+	
+	if(Data.OutHits.Num() == 0)
+	{
+		AgentManager->UpdateAgentFloorCheckResult(Guid, 0.0f, false);
+		return;
+	}
+	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
+	if(Locations.Num() == 0)
+	{
+		AgentManager->UpdateAgentFloorCheckResult(Guid, 0.0f, false);
+		return;
+	}
+	
+	TArray<float> HitZPoints;
+	for(int i = 0; i < Locations.Num(); i++)
+	{
+		HitZPoints.Add(Locations[i].Z);
+	}
+	// If this sort doesn't go the correct way look at using this lambda
+	// HitZPoints.Sort([](const float& a, const float& b) { return a.field < b.field; });
+	// src: kukikuilla on Reddit https://www.reddit.com/r/unrealengine/comments/d6fjii/how_does_one_sort_a_tarray_in_descending_order/
+	HitZPoints.Sort();
+	const float LowestValue = HitZPoints[0];
+	AgentManager->UpdateAgentFloorCheckResult(Guid, LowestValue, true);
+
 }
 
 void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
@@ -109,47 +168,51 @@ void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult
 // TODO: the FAgent container for each agent is where they ideally will belong
 void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	if(!Handle.IsValid() && AgentManager) //|| Data.OutHits.Num() < 1)
+	if(!Handle.IsValid() || !AgentManager) //|| Data.OutHits.Num() < 1)
 		return;
 
 	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingFront,
 		CheckIfBlockedByAgent(Data.OutHits));
-	
+#if (ENABLE_DEBUG_DRAW_LINE)
 	if(WorldRef)
 	{
 		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
 			false, 2, 0, 2.0f);
 	}
+#endif
 }
 
 void ANAIAgentClient::OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
+	if(!Handle.IsValid() || !AgentManager) //|| Data.OutHits.Num() < 1)
 		return;
-
+	
 	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingRight,
 		CheckIfBlockedByAgent(Data.OutHits));
-	
+#if (ENABLE_DEBUG_DRAW_LINE)
 	if(WorldRef)
 	{
 		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
 			false, 2, 0, 2.0f);
 	}
+#endif
 }
 
 void ANAIAgentClient::OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	if(!Handle.IsValid()) //|| Data.OutHits.Num() < 1)
+	if(!Handle.IsValid() || !AgentManager) //|| Data.OutHits.Num() < 1)
 		return;
-
+	
 	AgentManager->UpdateAgentAvoidanceResult(Guid, EAgentRaytraceDirection::TracingLeft,
 		CheckIfBlockedByAgent(Data.OutHits));
-	
+
+#if (ENABLE_DEBUG_DRAW_LINE)
 	if(WorldRef)
 	{
 		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
 			false, 2, 0, 2.0f);
 	}
+#endif
 }
 
 bool ANAIAgentClient::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects)
@@ -171,3 +234,23 @@ bool ANAIAgentClient::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects)
 	}
 	return false;
 }
+
+TArray<FVector> ANAIAgentClient::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults)
+{
+	TArray<FVector> Locations;
+	
+	for(int i = 0; i < HitResults.Num(); i++)
+	{
+		if(HitResults[i].Actor.IsValid())
+		{
+			if(!HitResults[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+			{
+				Locations.Add(HitResults[i].Location);
+			}
+		}
+	}
+	
+	return TArray<FVector>(); 
+}
+
+#undef ENABLE_DEBUG_DRAW_LINE

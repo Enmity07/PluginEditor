@@ -73,6 +73,9 @@ struct NAI_API FAgentTimers
 	FAgentTimedProperty MoveTime;
 	FAgentTimedProperty PathTime;
 	FAgentTimedProperty TraceTime;
+
+	FAgentTimedProperty FloorCheckTime;
+	FAgentTimedProperty FloorCheckTimeResultAge;
 	
 	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
@@ -86,24 +89,6 @@ struct NAI_API FAgentTimers
 #define ADVANCED_AVOIDANCE_ROWS			5
 #define AVOIDANCE_WIDTH_MULTIPLIER		1.5f
 #define AVOIDANCE_HEIGHT_MULTIPLIER		0.8f
-
-USTRUCT()
-struct NAI_API FAgentAvoidanceTaskTraceParams
-{
-	GENERATED_BODY()
-
-	FVector Start;
-	FVector End;
-};
-
-USTRUCT()
-struct NAI_API FAgentAsyncAvoidanceTask
-{
-	GENERATED_BODY()
-	
-	FTraceDelegate TraceDelegate;
-	TArray<FAgentAvoidanceTaskTraceParams> GridElements;
-};
 
 USTRUCT()
 struct NAI_API FAgentAvoidanceTaskResults
@@ -141,13 +126,12 @@ struct NAI_API FAgentAvoidanceProperties
 	FVector StartOffsetHeightVector;
 	FVector SideStartOffsetHeightVector;
 
-	/// <summary>
-	///	Initialize this type and set up/calculate
-	///	the grid columns/rows, along with various offsets.
-	/// </summary>
-	/// <param name="InAvoidanceLevel">The Avoidance level of the Agent.</param>
-	/// <param name="InRadius">The Radius of the Agent's collider.</param>
-	/// <param name="InHalfHeight">The Half Height of the Agent's collider.</param>
+	/** @name fghfghfgh
+	 * @brief fghfghfghfg
+	 * @param InAvoidanceLevel Hello Guys
+	 * @param InRadius
+	 * @param InHalfHeight
+	*/
 	FORCEINLINE void Initialize(
 		const EAgentAvoidanceLevel& InAvoidanceLevel,
 		const float InRadius,
@@ -217,6 +201,29 @@ struct NAI_API FAgentAvoidanceProperties
 #undef AVOIDANCE_WIDTH_MULTIPLIER
 
 USTRUCT()
+struct NAI_API FAgentFloorCheckResult
+{
+	GENERATED_BODY()
+	
+	// Result may be invalid if the trace didn't hit anything
+	uint8 bIsValidResult : 1;
+	// Float that represents the Z point of the hit location
+	float DetectedZPoint;
+};
+
+USTRUCT()
+struct NAI_API FAgentNavigationProperties
+{
+	GENERATED_BODY()
+
+	FNavAgentProperties NavAgentProperties;
+	// Local copy of the delegate which is called after an Async path task completes
+	FNavPathQueryDelegate NavPathQueryDelegate;
+
+	FTraceDelegate FloorCheckTraceDelegate;
+};
+
+USTRUCT()
 struct NAI_API FAgentProperties
 {
 	GENERATED_BODY()
@@ -228,12 +235,13 @@ struct NAI_API FAgentProperties
 	
 	float MoveSpeed;
 	float LookAtRotationRate;
-
+	
 	// Async Raytracing
 	FTraceDelegate RaytraceFrontDelegate;
 	FTraceDelegate RaytraceRightDelegate;
 	FTraceDelegate RaytraceLeftDelegate;
-	
+
+	FAgentNavigationProperties NavigationProperties;
 	FAgentAvoidanceProperties AvoidanceProperties;
 };
 
@@ -260,9 +268,6 @@ struct NAI_API FAgent
 	FAgentProperties AgentProperties;
 	
 	// Async Pathfinding
-	FNavAgentProperties NavAgentProperties;
-	// Local copy of the delegate which is called after an Async path task completes
-	FNavPathQueryDelegate NavPathQueryDelegate;
 	// Current navigation path as an array of vectors
 	TArray<FNavPathPoint> CurrentPath;
 
@@ -272,6 +277,8 @@ struct NAI_API FAgent
 	// We don't want to use the data from a given direction if it's old..
 	// ...this should only be relevant when the frame rate is very low
 	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
+
+	FAgentFloorCheckResult LatestFloorCheckResult;
 	
 	// Object that contains the timers
 	FAgentTimers Timers;
@@ -314,6 +321,14 @@ public:
 				break;
 		}
 	}
+
+	FORCEINLINE void UpdateFloorCheckResult(const float HitZPoint, const bool bSuccess)
+	{
+		LatestFloorCheckResult.bIsValidResult = bSuccess;
+		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
+		LatestFloorCheckResult.DetectedZPoint = (bSuccess) ? (HitZPoint) : (0.0f);
+		Timers.FloorCheckTimeResultAge.Reset();
+	}
 	
 	// Update the Timer settings for each agent using the passed in DeltaTime
 	// Won't update a timer if it has already ticked fully but hasn't been used yet
@@ -322,9 +337,11 @@ public:
 		Timers.MoveTime.AddTime(DeltaTime);
 		Timers.PathTime.AddTime(DeltaTime);
 		Timers.TraceTime.AddTime(DeltaTime);
+		Timers.FloorCheckTime.AddTime(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Forward.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Right.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Left.AddTimeRaw(DeltaTime);
+		Timers.FloorCheckTimeResultAge.AddTimeRaw(DeltaTime);
 	}
 
 	FORCEINLINE void CalculateAndUpdateSpeed(
@@ -367,16 +384,31 @@ public:
 	void AddAgent(const FAgent& Agent);
 	void RemoveAgent(const FGuid& Guid);
 	void UpdateAgent(const FAgent& Agent);
-	void UpdateAgentPath(const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints);
-	void UpdateAgentAvoidanceResult(
+	FORCEINLINE void UpdateAgentPath(
+		const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints)
+	{
+		AgentMap[Guid].UpdatePathPoints(PathPoints);
+	}
+	
+	FORCEINLINE void UpdateAgentAvoidanceResult(
 		const FGuid& Guid,
-		const EAgentRaytraceDirection& TraceDirection,
-		const bool bResult);
+		const EAgentRaytraceDirection& TraceDirection, const bool bResult)
+	{
+		AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
+	}
+	
+	FORCEINLINE void UpdateAgentFloorCheckResult(
+		const FGuid& Guid, const float HitZPoint,
+		const bool bSuccess)
+	{
+		AgentMap[Guid].UpdateFloorCheckResult(HitZPoint, bSuccess);
+	}
+	
 private:
 	void AgentPathTaskAsync(
-		const FGuid& Guid,
-		const FVector& Location,
-		const FVector& Start
+		const FVector& Start,
+		const FVector& Goal,
+		const FAgentNavigationProperties& NavigationProperties
 	) const;
 	void AgentTraceTaskAsync( 
 		const FVector& AgentLocation,
@@ -386,7 +418,7 @@ private:
 	) const;
 	
 	// TODO: Not sure why i inlined this.. implement it properly
-	FORCEINLINE FVector GetAgentGoalLocationFromType(
+	FVector GetAgentGoalLocationFromType(
 		const EAgentType& AgentType,
 		const FVector& PlayerLocation) const;
 	

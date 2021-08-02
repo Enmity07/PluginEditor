@@ -24,6 +24,9 @@ protected:
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Agent")
 	EAgentType AgentType;
+
+	UPROPERTY(EditAnywhere)
+	float DownwardOffsetForce;
 	
 	UPROPERTY(EditAnywhere)
 	class ANAIAgentManager *AgentManagerVariable;
@@ -47,7 +50,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent")
 	EAgentAvoidanceLevel AvoidanceLevel;
-	
+
+	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
 	void PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
 	void OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
@@ -68,6 +72,7 @@ private:
 	
 private:
 	bool CheckIfBlockedByAgent(const TArray<FHitResult>& Objects);
+	TArray<FVector> GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults);
 	
 	UPROPERTY()
 	FGuid Guid;
