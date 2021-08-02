@@ -82,7 +82,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Kick of an Async Path Task if the agent is ready for one
 				if(Agent.Timers.PathTime.bIsReady)
 				{
-					// Get the Goal Location from the agent type
+					// Get the Goal Location from the Agent type
 					// the pathfinding can be radically different between types
 					// so GetAgentGoalLocationFromType() determines what vector we need
 					// for the async pathfinding task
