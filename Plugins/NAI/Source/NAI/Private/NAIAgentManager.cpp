@@ -4,7 +4,6 @@
 
 #include "DrawDebugHelpers.h"
 #include "NAIAgentClient.h"
-#include "Engine/CollisionProfile.h"
 #include "Kismet/KismetMathLibrary.h"
 
 // #include "Kismet/KismetMathLibrary.h"
@@ -82,7 +81,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Kick of an Async Path Task if the agent is ready for one
 				if(Agent.Timers.PathTime.bIsReady)
 				{
-					// Get the Goal Location from the agent type
+					// Get the Goal Location from the Agent type
 					// the pathfinding can be radically different between types
 					// so GetAgentGoalLocationFromType() determines what vector we need
 					// for the async pathfinding task
@@ -97,7 +96,8 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				if(Agent.Timers.FloorCheckTime.bIsReady)
 				{
 					const FVector StartPoint = FVector(
-						AgentLocation.X, AgentLocation.Y, (AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
+						AgentLocation.X, AgentLocation.Y,
+						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
 					const FVector EndPoint = StartPoint - (FVector(0.0f, 0.0f, 1.0f) * 100.0f);
 					
 					WorldRef->AsyncLineTraceByChannel(
@@ -127,7 +127,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				{
 					// No reason to move if we don't have a path
 					if(Agent.CurrentPath.Num() > 1) // Need more than 1 path point to for it to be a path
-					{
+					{			
 						// Calculate the new FVector for this move update
 						const FVector Start = Agent.CurrentPath[0];
 						const FVector End = Agent.CurrentPath[1];
@@ -137,12 +137,14 @@ void ANAIAgentManager::Tick(float DeltaTime)
 #endif
 						// Get the direction in a normalized format
 						const FVector Direction = (End - Start).GetSafeNormal();
+
 						FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
+
+						// If we need to adjust Z axis for the floor check
+						if(Agent.LatestFloorCheckResult.bIsValidResult)
+							NewLoc.Z = (Agent.LatestFloorCheckResult.DetectedZPoint +
+								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f));
 						
-						NewLoc = NewLoc -
-							(FVector(0.0f, 0.0f, 1.0f) *
-								(Agent.AgentProperties.MoveSpeed * Agent.AgentClient->DownwardOffsetForce * DeltaTime)
-							);
 						const FVector MoveDelta = NewLoc - AgentLocation;
 
 						// Calculate our new rotation

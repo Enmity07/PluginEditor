@@ -17,6 +17,7 @@ ANAIAgentClient::ANAIAgentClient()
 	CapsuleComponent->SetCanEverAffectNavigation(false);
 	CapsuleComponent->AreaClass = nullptr;
 	CapsuleComponent->SetCollisionProfileName(TEXT("AgentClient"));
+	CapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_Pawn);
 	CapsuleComponent->SetReceivesDecals(false);
 	CapsuleComponent->PrimaryComponentTick.bCanEverTick = false;
 	RootComponent = CapsuleComponent;
@@ -73,7 +74,7 @@ void ANAIAgentClient::BeginPlay()
 		Agent.Timers.MoveTime.TickRate = MoveTickInterval;
 		Agent.Timers.PathTime.TickRate = PathfindingTickInterval;
 		Agent.Timers.TraceTime.TickRate = AvoidanceTickInterval;
-		Agent.Timers.FloorCheckTime.TickRate = 0.1f;
+		Agent.Timers.FloorCheckTime.TickRate = 0.01f;
 
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentRadius =
 			Agent.AgentProperties.CapsuleRadius;
@@ -111,13 +112,7 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 	if(!Handle.IsValid() || !AgentManager)
 		return;
 
-#if (ENABLE_DEBUG_PRINT_SCREEN)
-	if(GEngine)
-		GEngine->AddOnScreenDebugMessage(
-			-1, 1.0f, FColor::Yellow,
-			FString::Printf(TEXT("Total number of hits: %d"),
-			Data.OutHits.Num()));
-#endif
+
 #if (ENABLE_DEBUG_DRAW_LINE)
 	if(WorldRef)
 	{
@@ -132,6 +127,13 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 		return;
 	}
 	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
+#if (ENABLE_DEBUG_PRINT_SCREEN)
+	if(GEngine)
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Total number non agents locs: %d"),
+			Locations.Num()));
+#endif
 	if(Locations.Num() == 0)
 	{
 		AgentManager->UpdateAgentFloorCheckResult(Guid, 0.0f, false);
@@ -237,7 +239,7 @@ bool ANAIAgentClient::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects)
 
 TArray<FVector> ANAIAgentClient::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults)
 {
-	TArray<FVector> Locations;
+	TArray<FVector> Locations = TArray<FVector>();
 	
 	for(int i = 0; i < HitResults.Num(); i++)
 	{
@@ -250,7 +252,7 @@ TArray<FVector> ANAIAgentClient::GetAllHitLocationsNotFromAgents(const TArray<FH
 		}
 	}
 	
-	return TArray<FVector>(); 
+	return Locations; 
 }
 
 #undef ENABLE_DEBUG_DRAW_LINE

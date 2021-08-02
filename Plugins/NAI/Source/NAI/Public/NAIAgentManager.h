@@ -30,14 +30,20 @@ struct NAI_API FAgentTimedProperty
 	float Time;
 	uint8 bIsReady : 1;
 
+	uint8 bIsPaused : 1;
+
 	// Default initialization. Really important bIsReady == true fpr how
 	// the plugin works
-	FAgentTimedProperty() { TickRate = 1.0f; Time = 0.0f; bIsReady = true; }
+	FAgentTimedProperty() { TickRate = 1.0f; Time = 0.0f; bIsReady = true; bIsPaused = false;}
 
+	FORCEINLINE void Pause() { bIsPaused = true; }
+	FORCEINLINE void Unpause() { bIsPaused = false; }
 	FORCEINLINE void Reset() { Time = 0.0f; bIsReady = false; }
-	// Add time only is bIsReady == false
 	FORCEINLINE void AddTime(const float InTime)
 	{
+		if(bIsPaused)
+			return;
+		
 		if(!bIsReady)
 		{
 			if(Time >= TickRate)
@@ -75,8 +81,8 @@ struct NAI_API FAgentTimers
 	FAgentTimedProperty TraceTime;
 
 	FAgentTimedProperty FloorCheckTime;
-	FAgentTimedProperty FloorCheckTimeResultAge;
 	
+	FAgentTimedProperty FloorCheckTimeResultAge;
 	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
 
@@ -126,11 +132,11 @@ struct NAI_API FAgentAvoidanceProperties
 	FVector StartOffsetHeightVector;
 	FVector SideStartOffsetHeightVector;
 
-	/** @name fghfghfgh
-	 * @brief fghfghfghfg
-	 * @param InAvoidanceLevel Hello Guys
-	 * @param InRadius
-	 * @param InHalfHeight
+	/**
+	 * Initialize everything
+	 * @param InAvoidanceLevel The avoidance level of the Agent
+	 * @param InRadius The Radius of the Agent
+	 * @param InHalfHeight The Half Height of the Agent
 	*/
 	FORCEINLINE void Initialize(
 		const EAgentAvoidanceLevel& InAvoidanceLevel,
@@ -160,34 +166,6 @@ struct NAI_API FAgentAvoidanceProperties
 		SideStartOffsetWidth = WidthIncrementSize * ((SideColumns - 1.0f) * 0.5f);
 		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1.0f) * 0.5f));
 		SideStartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((SideRows - 1.0f) * 0.5f));
-	}
-
-	/// <summary>
-	///	Override of the = operator for this type.
-	/// </summary>
-	/// <param name="Other">The input variable taken by reference.</param>
-	FAgentAvoidanceProperties& operator=(const FAgentAvoidanceProperties& Other)
-	{
-		if (this == &Other)
-			return *this;
-		AvoidanceLevel = Other.AvoidanceLevel;
-		GridWidth = Other.GridWidth;
-		GridHalfWidth = Other.GridHalfWidth;
-		GridHeight = Other.GridHeight;
-		GridHalfHeight = Other.GridHalfHeight;
-		GridColumns = Other.GridColumns;
-		GridRows = Other.GridRows;
-		SideColumns = Other.SideColumns;
-		SideRows = Other.SideRows;
-		WidthIncrementSize = Other.WidthIncrementSize;
-		SideWidthIncrementSize = Other.SideWidthIncrementSize;
-		HeightIncrementSize = Other.HeightIncrementSize;
-		StartOffsetWidth = Other.StartOffsetWidth;
-		SideStartOffsetWidth = Other.SideStartOffsetWidth;
-		StartOffsetHeightVector = Other.StartOffsetHeightVector;
-		SideStartOffsetHeightVector = Other.SideStartOffsetHeightVector;
-		
-		return *this;
 	}
 };
 
@@ -321,7 +299,12 @@ public:
 				break;
 		}
 	}
-
+	
+	/**
+	 * Update the LatestFloorCheckResult with new data
+	 * @param HitZPoint The Z axis value for this result
+	 * @param bSuccess Whether or not the Floor Check worked
+	*/
 	FORCEINLINE void UpdateFloorCheckResult(const float HitZPoint, const bool bSuccess)
 	{
 		LatestFloorCheckResult.bIsValidResult = bSuccess;
@@ -353,6 +336,26 @@ public:
 		const float Distance = FNAICalculator::Distance(PositionThisFrame, PositionLastFrame);
 		Speed = Distance / DeltaTime;
 		AgentClient->Speed = Speed;
+	}
+};
+
+DECLARE_DELEGATE(FAgentTaskFunctionRef);
+template<typename TaskType>
+struct NAI_API TAgentTask
+{
+	TaskType TypeVar;
+	FAgentTaskFunctionRef FunctionRef;
+
+	TAgentTask(const TaskType& InType, const TFunctionRef<void()> InFunctionRef)
+	{
+		TypeVar = InType;
+		FunctionRef.BindLambda(InFunctionRef());
+	}
+	
+	FORCEINLINE void RunTask() 
+	{
+		checkf(FunctionRef.IsBound(), TEXT("Attempting to call an unbound delegate!"));
+		FunctionRef.Execute();
 	}
 };
 
@@ -396,7 +399,13 @@ public:
 	{
 		AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
 	}
-	
+
+	/**
+	* Update the LatestFloorCheckResult of a particular Agent
+	* @param Guid The Guid of the Agent to update
+	* @param HitZPoint The Z axis value for this result
+	* @param bSuccess Whether or not the Floor Check worked
+	*/
 	FORCEINLINE void UpdateAgentFloorCheckResult(
 		const FGuid& Guid, const float HitZPoint,
 		const bool bSuccess)
