@@ -88,7 +88,7 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 	// Below is an example of how to add/remove slots through a button
 	// Intended use is to be able to hide/show different sections of the details
 	// panel. So a drop down of different categories could be used to toggle/switch
-	// between different details sections dynamicaly
+	// between different details sections
 	
 	
 	// Add the custom Row
@@ -119,28 +119,31 @@ void FCustomAgentClientDetailsPanel::CustomizeDetails(IDetailLayoutBuilder& Deta
 		]
 		+ SVerticalBox::Slot()
 		[
-			SNew(SHorizontalBox)
-			+ SHorizontalBox::Slot()
-			.HAlign(HAlign_Center)
+			SNew(SBorder)
+			.BorderImage(SlateStyle->GetBrush("NAI.BackgroundColor"))
 			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("123")))
-			]
-			+ SHorizontalBox::Slot()
-			.HAlign(HAlign_Center)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("F345")))
-			]
-			+ SHorizontalBox::Slot()
-			.HAlign(HAlign_Center)
-			[
-				SNew(SButton)
-				.Text(FText::FromString(TEXT("F34534")))
+				SNew(SHorizontalBox)
+				+ SHorizontalBox::Slot()
+				.HAlign(HAlign_Center)
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("123")))
+				]
+				+ SHorizontalBox::Slot()
+				.HAlign(HAlign_Center)
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("F345")))
+				]
+				+ SHorizontalBox::Slot()
+				.HAlign(HAlign_Center)
+				[
+					SNew(SButton)
+					.Text(FText::FromString(TEXT("F34534")))
+				]
 			]
 		]
 
-		
 		+ SVerticalBox::Slot() // CreatePathToPlayer Details Section
 		.HAlign(HAlign_Center)
 		.FillHeight(true)

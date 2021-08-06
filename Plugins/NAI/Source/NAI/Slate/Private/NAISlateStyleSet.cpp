@@ -17,6 +17,10 @@ void FNAISlateStyleSet::Initialize()
 	MSStyleInstance = Create();
 	FSlateStyleRegistry::RegisterSlateStyle(*MSStyleInstance); // Register this custom slate style
 
+	/** TODO: Rember that you need FLinearColor(FColor()) to define a color that will work properly */
+	MSStyleInstance->Set("NAI.BackgroundColor",
+		new FSlateColorBrush(FLinearColor(FColor(20.0f, 20.0f, 20.0f))));
+
 	// Get a reference to the Small Logo
 	FSlateImageBrush* ThumbnailBrush = new FSlateImageBrush(
 	MSStyleInstance->RootToContentDir(TEXT("TempLogoSmall.png")),
@@ -70,4 +74,3 @@ TUniquePtr<FSlateStyleSet> FNAISlateStyleSet::Create()
 	check(Style); // Crash if something went wrong creating the style
 	return Style;
 }
-

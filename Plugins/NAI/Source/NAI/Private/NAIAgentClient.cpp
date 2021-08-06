@@ -8,7 +8,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 
-// Sets default values
 ANAIAgentClient::ANAIAgentClient()
 {
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Capsule"));
@@ -43,7 +42,6 @@ ANAIAgentClient::ANAIAgentClient()
 	PrimaryActorTick.bCanEverTick = false;
 }
 
-// Called when the game starts or when spawned
 void ANAIAgentClient::BeginPlay()
 {
 	Super::BeginPlay();
@@ -93,8 +91,8 @@ void ANAIAgentClient::BeginPlay()
 
 		Agent.bIsHalted = false;
 
-		// Bind the PathCompleteDelegate function to the Async Navigation Query
-		Agent.AgentProperties.NavigationProperties.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::PathCompleteDelegate);
+		// Bind the OnAsyncPathComplete function to the Async Navigation Query
+		Agent.AgentProperties.NavigationProperties.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::OnAsyncPathComplete);
 		Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate.BindUObject(this, &ANAIAgentClient::OnFloorCheckTraceComplete);
 		Agent.AgentProperties.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
 		Agent.AgentProperties.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
@@ -111,7 +109,6 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 {
 	if(!Handle.IsValid() || !AgentManager)
 		return;
-
 
 #if (ENABLE_DEBUG_DRAW_LINE)
 	if(WorldRef)
@@ -145,16 +142,12 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 	{
 		HitZPoints.Add(Locations[i].Z);
 	}
-	// If this sort doesn't go the correct way look at using this lambda
-	// HitZPoints.Sort([](const float& a, const float& b) { return a.field < b.field; });
-	// src: kukikuilla on Reddit https://www.reddit.com/r/unrealengine/comments/d6fjii/how_does_one_sort_a_tarray_in_descending_order/
 	HitZPoints.Sort();
-	const float LowestValue = HitZPoints[0];
-	AgentManager->UpdateAgentFloorCheckResult(Guid, LowestValue, true);
-
+	const float HighestValue = HitZPoints.Last();
+	AgentManager->UpdateAgentFloorCheckResult(Guid, HighestValue, true);
 }
 
-void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
+void ANAIAgentClient::OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
 {
 	if(ResultType == ENavigationQueryResult::Success)
 	{	
@@ -166,8 +159,6 @@ void ANAIAgentClient::PathCompleteDelegate(uint32 PathId, ENavigationQueryResult
 	}
 }
 
-// TODO: These delegate functions only ended up here because we used the bind UObject function...
-// TODO: the FAgent container for each agent is where they ideally will belong
 void ANAIAgentClient::OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data)
 {
 	if(!Handle.IsValid() || !AgentManager) //|| Data.OutHits.Num() < 1)

@@ -52,7 +52,7 @@ public:
 	EAgentAvoidanceLevel AvoidanceLevel;
 
 	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
-	void PathCompleteDelegate(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
+	void OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
 	void OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);

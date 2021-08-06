@@ -4,14 +4,12 @@
 
 #include "DrawDebugHelpers.h"
 #include "NAIAgentClient.h"
+#include "Async/Async.h"
 #include "Kismet/KismetMathLibrary.h"
-
-// #include "Kismet/KismetMathLibrary.h"
 
 #define NULL_VECTOR FVector(125.0f, 420.0f, 317.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
 
-// Sets default values
 ANAIAgentManager::ANAIAgentManager()
 {
 	MaxAgentCount = MAX_AGENT_PRE_ALLOC;
@@ -23,7 +21,6 @@ ANAIAgentManager::ANAIAgentManager()
 	PrimaryActorTick.bCanEverTick = true;
 }
 
-// Called when the game starts or when spawned
 void ANAIAgentManager::BeginPlay()
 {
 	Super::BeginPlay();
@@ -33,11 +30,12 @@ void ANAIAgentManager::BeginPlay()
 
 #undef MAX_AGENT_PRE_ALLOC
 
-// If this is enabled with a lot of agents active in the game
-// it will crash the editor so use it with caution 
+/**
+ * If this is enabled with a lot of agents active in the game it will crash the editor,
+ * so use it with caution.
+*/
 #define ENABLE_DEBUG_DRAW_LINE true
 
-// Called every frame
 void ANAIAgentManager::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
@@ -72,7 +70,8 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				// Calculate the Agents Speed and update the property on the AgentClient object
 				const FVector AgentLocation = Agent.AgentClient->GetActorLocation();
 				Agent.CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
-		
+
+				// If the Agent has been set to stop, don't do anything
 		        if(Agent.bIsHalted)
 		        {
 		            continue;
@@ -122,11 +121,11 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					Agent.Timers.TraceTime.Reset();
 				}
 				
-				// Handle the movement/rotation of the agent for this frame
+				// Handle the movement/rotation of the agent only if it is ready for one
 				if(Agent.Timers.MoveTime.bIsReady)
 				{
 					// No reason to move if we don't have a path
-					if(Agent.CurrentPath.Num() > 1) // Need more than 1 path point to for it to be a path
+					if(Agent.CurrentPath.Num() > 1) // Need at least 2 path points for it to be a path
 					{			
 						// Calculate the new FVector for this move update
 						const FVector Start = Agent.CurrentPath[0];
@@ -142,9 +141,12 @@ void ANAIAgentManager::Tick(float DeltaTime)
 
 						// If we need to adjust Z axis for the floor check
 						if(Agent.LatestFloorCheckResult.bIsValidResult)
+						{
 							NewLoc.Z = (Agent.LatestFloorCheckResult.DetectedZPoint +
-								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f));
-						
+								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+						}
+
+						// Calculate the difference in movement
 						const FVector MoveDelta = NewLoc - AgentLocation;
 
 						// Calculate our new rotation
@@ -163,7 +165,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					
 					Agent.Timers.MoveTime.Reset();
 				}
-
+				
 				// Update the agent in the map to apply the changes we've made this tick
 				AgentMap[Guid] = Agent;
 			}
@@ -282,6 +284,8 @@ void ANAIAgentManager::AgentTraceTaskAsync(
 				TraceDirectionDelegate = AgentProperties.RaytraceRightDelegate;
 				RelativeForward = Right;
 				RelativeRight = Forward;
+				break;
+			default:
 				break;
 		}
 

@@ -13,6 +13,10 @@
 #include "GameFramework/Actor.h"
 #include "NAIAgentManager.generated.h"
 
+/**
+ * Simple enum used to categorize each set of Raytraces done
+ * during each Agent's avoidance calculations.
+ */
 UENUM()
 enum class EAgentRaytraceDirection : uint8
 {
@@ -21,24 +25,44 @@ enum class EAgentRaytraceDirection : uint8
 	TracingRight UMETA(DisplayName = "TracingRight"),
 };
 
+/**
+ * Specialist timer which will automatically stop when a set
+ * interval of time has passed, and become "ready".
+ * The timer then has to be reset to be used again.
+ * @biref Specialist timer for use by the Agents.
+ */
 USTRUCT()
 struct NAI_API FAgentTimedProperty
 {
 	GENERATED_BODY()
 
+	/** The tick/time interval this timer should become "ready" at. */
 	float TickRate;
+	/** Used to track time passed. */
 	float Time;
+	/** Has this timer completed it's tick interval? */
 	uint8 bIsReady : 1;
-
+	/** Used to pause/unpause the timer. */
 	uint8 bIsPaused : 1;
 
-	// Default initialization. Really important bIsReady == true fpr how
-	// the plugin works
+	/** Create the timer, starting in the "ready" state. */
 	FAgentTimedProperty() { TickRate = 1.0f; Time = 0.0f; bIsReady = true; bIsPaused = false;}
 
+	/** Pause the timer. */
 	FORCEINLINE void Pause() { bIsPaused = true; }
+
+	/** Unpause the timer. */
 	FORCEINLINE void Unpause() { bIsPaused = false; }
-	FORCEINLINE void Reset() { Time = 0.0f; bIsReady = false; }
+
+	/** Resets the timer. This will also unpause the timer. */
+	FORCEINLINE void Reset() { Time = 0.0f; bIsReady = false; bIsPaused = false; }
+
+	/**
+	 * This will only add the InTime if the timer is not
+	 * already in the "ready" state. It will also not add it
+	 * if the timer is paused.
+	 * @param InTime The amount of time to add.
+	 */
 	FORCEINLINE void AddTime(const float InTime)
 	{
 		if(bIsPaused)
@@ -57,7 +81,11 @@ struct NAI_API FAgentTimedProperty
 			}
 		}
 	}
-	// Always add time
+
+	/** 
+	 * Always add time regardless of the state of the timer.
+	 * @param InTime The amount of time to add.
+	 */
 	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
 };
 
@@ -81,6 +109,7 @@ struct NAI_API FAgentTimers
 	FAgentTimedProperty TraceTime;
 
 	FAgentTimedProperty FloorCheckTime;
+	FAgentTimedProperty StepCheckTime;
 	
 	FAgentTimedProperty FloorCheckTimeResultAge;
 	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
@@ -133,7 +162,8 @@ struct NAI_API FAgentAvoidanceProperties
 	FVector SideStartOffsetHeightVector;
 
 	/**
-	 * Initialize everything
+	 * TODO: Document this
+	 * @brief Calculates and sets up the Avoidance grid of traces.
 	 * @param InAvoidanceLevel The avoidance level of the Agent
 	 * @param InRadius The Radius of the Agent
 	 * @param InHalfHeight The Half Height of the Agent
@@ -178,14 +208,18 @@ struct NAI_API FAgentAvoidanceProperties
 #undef ADVANCED_AVOIDANCE_ROWS
 #undef AVOIDANCE_WIDTH_MULTIPLIER
 
+/**
+ * Simple struct used to hold the result of each Floor Check.
+ * If the floor check failed, the DetectedZPoint is set to 0.0f.
+ */
 USTRUCT()
 struct NAI_API FAgentFloorCheckResult
 {
 	GENERATED_BODY()
 	
-	// Result may be invalid if the trace didn't hit anything
+	/** Result may be invalid if the trace didn't hit anything */
 	uint8 bIsValidResult : 1;
-	// Float that represents the Z point of the hit location
+	/** Float that represents the Z point of the hit location if we hit one */
 	float DetectedZPoint;
 };
 
@@ -195,7 +229,7 @@ struct NAI_API FAgentNavigationProperties
 	GENERATED_BODY()
 
 	FNavAgentProperties NavAgentProperties;
-	// Local copy of the delegate which is called after an Async path task completes
+	/** Local copy of the delegate which is called after an Async path task completes */
 	FNavPathQueryDelegate NavPathQueryDelegate;
 
 	FTraceDelegate FloorCheckTraceDelegate;
@@ -206,54 +240,78 @@ struct NAI_API FAgentProperties
 {
 	GENERATED_BODY()
 
+	/** The type of Agent. */
 	EAgentType AgentType;
-
+	/** The Radius of the Agent's Capsule collider. */
 	float CapsuleRadius;
+	/** The Half Height of the Agent's Capsule collider. */
 	float CapsuleHalfHeight;
-	
+	/** The MoveSpeed of this Agent. */
 	float MoveSpeed;
+	/** The speed at which the Agent will rotate into the direction it's moving. */
 	float LookAtRotationRate;
 	
 	// Async Raytracing
 	FTraceDelegate RaytraceFrontDelegate;
 	FTraceDelegate RaytraceRightDelegate;
 	FTraceDelegate RaytraceLeftDelegate;
-
+	/** Sub-structure containing the Agent's Navigation properties. */
 	FAgentNavigationProperties NavigationProperties;
+	/** Sub-structure containing the Agent's Avoidance properties. */
 	FAgentAvoidanceProperties AvoidanceProperties;
 };
 
 class AAgentManager;
 
+/**
+ * This struct serves as a container for all variables related to each Agent.
+ * Things such as task variables and task results are stored in here.
+ * The reason this struct was created initially was to make a thread-safe
+ * wrapper type for each Agent. Instead now that we just used the Async systems
+ * already present in UE, it has been modified to contain everything the GameThread
+ * needs to work with those tasks.
+ * @brief This is a container for everything each Agent needs/does.
+ */
 USTRUCT()
 struct NAI_API FAgent
 {
 	GENERATED_BODY()
-	
+
+	/**
+	 * A copy of the Guid for this Agent.
+	 * This is used for easy identification, and to allow iteration
+	 * in the agent map, in an ordered fashion. 
+	 */
 	FGuid Guid;
-	
-	// Pointer to the Agent Object itself
+	/** Pointer to the Agent UObject itself. */
 	UPROPERTY()
 	class ANAIAgentClient *AgentClient;
-	// Pointer to the manager that created this for easy access
+	/** Pointer to the manager that created this, for easy access. */
 	UPROPERTY()
 	class ANAIAgentManager *AgentManager;
 	
-	// Contains all the agents properties,
-	// such as Move Speed, Tick rates etc...
-	// All these vars are set on the AgentClient
-	// object itself via EditAnywhere UPROPERTY()'s
+	/**
+	 * Contains all the properties for this Agent.
+	 * This includes the UPROPERTY(EditAnywhere) variables that
+	 * are exposed to the Editors UI, along with things related to
+	 * the Agent's tasks.
+	 */
 	FAgentProperties AgentProperties;
 	
-	// Async Pathfinding
-	// Current navigation path as an array of vectors
+	/**
+	 * When an Async Pathfinding job has completed, it calls
+	 * a delegate on the AgentClient which will in turn update this
+	 * with a new path for the Agent.
+	 */
 	TArray<FNavPathPoint> CurrentPath;
 
-	// The latest results for Each Avoidance Trace direction
-	// Timers for the age of each directions trace results are stored
-	// in the Timers variable under the AvoidanceResults variable.
-	// We don't want to use the data from a given direction if it's old..
-	// ...this should only be relevant when the frame rate is very low
+	/**
+	 * The latest results for Each Avoidance Trace direction
+	 * Timers for the age of each directions trace results are stored
+	 * in the Timers variable under the AvoidanceResults variable.
+	 * We don't want to use the data from a given direction if it's old..
+	 * ...this should only be relevant when the frame rate is very low
+	 */
 	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
 
 	FAgentFloorCheckResult LatestFloorCheckResult;
@@ -269,19 +327,32 @@ private:
 	FVector PositionLastFrame;
 	
 public:
-	// Whether or not this agent is halted
+	/**
+	 * Whether or not this agent is halted. If the Agent is halted,
+	 * it will still have it's Timers and Velocity updated.
+	 */
 	uint8 bIsHalted : 1;
-	
+
+	/** Set the Velocity of this Agent. */
 	FORCEINLINE void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
+
+	/** Set the Agent either be halted, or not. */
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
-	// Update the Agents PathPoints for their current navigation path
+	/** Update the Agents PathPoints for their current navigation path */
 	FORCEINLINE void UpdatePathPoints(const TArray<FNavPathPoint>& Points)
 	{
 		CurrentPath = Points;
 	}
 
-	FORCEINLINE void UpdateAvoidanceResult(const EAgentRaytraceDirection& InDirection, const bool bInResult)
+	/**
+	 * TODO: Document this
+	 * @param InDirection 
+	 * @param bInResult 
+	 */
+	FORCEINLINE void UpdateAvoidanceResult(
+		const EAgentRaytraceDirection& InDirection,
+		const bool bInResult)
 	{
 		switch(InDirection)
 		{
@@ -296,6 +367,8 @@ public:
 			case EAgentRaytraceDirection::TracingRight:
 				LatestAvoidanceTaskResults.bRightBlocked = bInResult;
 				Timers.AvoidanceResultAgeTimers.Right.Reset();
+				break;
+			default:
 				break;
 		}
 	}
@@ -313,8 +386,12 @@ public:
 		Timers.FloorCheckTimeResultAge.Reset();
 	}
 	
-	// Update the Timer settings for each agent using the passed in DeltaTime
-	// Won't update a timer if it has already ticked fully but hasn't been used yet
+	/**
+	 * Update the Timer settings for each agent using the passed in DeltaTime.
+	 * Won't update a timer if it has already ticked fully but hasn't been used yet,
+	 * unless you use AddTimeRaw().
+	 * @param DeltaTime The amount of time that has passed since the last update.
+	*/
 	FORCEINLINE void UpdateTimers(const float DeltaTime)
 	{
 		Timers.MoveTime.AddTime(DeltaTime);
@@ -327,6 +404,11 @@ public:
 		Timers.FloorCheckTimeResultAge.AddTimeRaw(DeltaTime);
 	}
 
+	/**
+	 * TODO: Document this
+	 * @param Location Location of the Agent.
+	 * @param DeltaTime Time passed since last frame.
+	 */
 	FORCEINLINE void CalculateAndUpdateSpeed(
 		const FVector& Location,
 		const float DeltaTime)
@@ -339,72 +421,91 @@ public:
 	}
 };
 
-DECLARE_DELEGATE(FAgentTaskFunctionRef);
-template<typename TaskType>
-struct NAI_API TAgentTask
-{
-	TaskType TypeVar;
-	FAgentTaskFunctionRef FunctionRef;
-
-	TAgentTask(const TaskType& InType, const TFunctionRef<void()> InFunctionRef)
-	{
-		TypeVar = InType;
-		FunctionRef.BindLambda(InFunctionRef());
-	}
-	
-	FORCEINLINE void RunTask() 
-	{
-		checkf(FunctionRef.IsBound(), TEXT("Attempting to call an unbound delegate!"));
-		FunctionRef.Execute();
-	}
-};
-
+/**
+ * TODO: Document this
+ */
 UCLASS(BlueprintType)
 class NAI_API ANAIAgentManager : public AActor
 {
 	GENERATED_BODY()
 	
 public:	
-	// Sets default values for this actor's properties
+	/** Sets default values for this Agent's properties */
 	ANAIAgentManager();
 
+	/**
+	 * If the Agent type is PathToPlayer, we need to know which class the player
+	 * is so that we can then path to it.
+	 */
 	UPROPERTY(EditAnywhere)
 	TSubclassOf<AActor> PlayerClass;
-	
+
+	/** The maximum amount of Agents this manager should be allowed to spawn. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "AgentManager|Agents|Limits", meta =
 		(ClampMin = 0, ClampMax = 10000, UIMin = 0, UIMax = 10000))
 	int MaxAgentCount;
 	
 protected:
-	// Called when the game starts or when spawned
+	/** Called when the game starts or when spawned */
 	virtual void BeginPlay() override;
 
 public:	
-	// Called every frame
+	/** Called every frame */
 	virtual void Tick(float DeltaTime) override;
 	
 public:
+	/**
+	 * Add a new Agent to the map.
+	 * We don't need to take the Guid because the Agent variable will
+	 * contain a copy of it.
+	 * @param Agent The new Agent to add to the map.
+	 */
 	void AddAgent(const FAgent& Agent);
+	
+	/**
+	 * Remove an Agent from the map.
+	 * @param Guid The Guid of the Agent to remove.
+	 */
 	void RemoveAgent(const FGuid& Guid);
+	
+	/**
+	 * Overwrite the Agent in the map with a new one.
+	 * We don't need to take the Guid because the Agent variable will
+	 * contain a copy of it.
+	 * @param Agent The new Agent were going to replace the old one with.
+	 */
 	void UpdateAgent(const FAgent& Agent);
+	
+	/**
+	* Update the Agents current path with new PathPoints.
+	* @param Guid The Guid of the Agent to update.
+	* @param PathPoints The direction of this trace result.
+	*/
 	FORCEINLINE void UpdateAgentPath(
 		const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints)
 	{
 		AgentMap[Guid].UpdatePathPoints(PathPoints);
 	}
 	
+	/**
+	* Update the LatestAvoidanceResult for the given direction
+	* on each Agent.
+	* @param Guid The Guid of the Agent to update.
+	* @param TraceDirection The direction of this trace result.
+	* @param bResult Whether or not we are blocked in this direction.
+	*/
 	FORCEINLINE void UpdateAgentAvoidanceResult(
 		const FGuid& Guid,
 		const EAgentRaytraceDirection& TraceDirection, const bool bResult)
 	{
 		AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
 	}
-
+	
 	/**
-	* Update the LatestFloorCheckResult of a particular Agent
-	* @param Guid The Guid of the Agent to update
-	* @param HitZPoint The Z axis value for this result
-	* @param bSuccess Whether or not the Floor Check worked
+	* Update the LatestFloorCheckResult of a particular Agent.
+	* @param Guid The Guid of the Agent to update.
+	* @param HitZPoint The Z axis value for this result.
+	* @param bSuccess Whether or not the Floor Check worked.
 	*/
 	FORCEINLINE void UpdateAgentFloorCheckResult(
 		const FGuid& Guid, const float HitZPoint,
@@ -414,11 +515,25 @@ public:
 	}
 	
 private:
+	/**
+	 * // TODO: Document this
+	 * @param Start 
+	 * @param Goal 
+	 * @param NavigationProperties 
+	 */
 	void AgentPathTaskAsync(
 		const FVector& Start,
 		const FVector& Goal,
 		const FAgentNavigationProperties& NavigationProperties
 	) const;
+	
+	/**
+	 * // TODO: Document this
+	 * @param AgentLocation 
+	 * @param Forward 
+	 * @param Right 
+	 * @param AvoidanceProperties 
+	 */
 	void AgentTraceTaskAsync( 
 		const FVector& AgentLocation,
 		const FVector& Forward,
@@ -426,33 +541,46 @@ private:
 		const FAgentProperties& AvoidanceProperties
 	) const;
 	
-	// TODO: Not sure why i inlined this.. implement it properly
+	// TODO: Not sure why i didn't inline this..
+	/**
+	 * // TODO: Document this
+	 * @param AgentType 
+	 * @param PlayerLocation 
+	 * @return 
+	 */
 	FVector GetAgentGoalLocationFromType(
 		const EAgentType& AgentType,
 		const FVector& PlayerLocation) const;
 	
+	/**
+	 * // TODO: Document this 
+	 */
 	void Initialize();
-	
 private:
+	/** Used to hold a reference to the current World. */
 	UPROPERTY()
 	class UWorld *WorldRef;
+	/** Used to hold a reference to the current Navigation System. */
 	UPROPERTY()
 	class UNavigationSystemV1 *NavSysRef;
+	/** Used to hold a reference to the current Navigation Data. */
 	UPROPERTY()
 	class ANavigationData *NavDataRef;
-	
+	/** Used to hold a reference to the Shared Navigation Query. */
 	FSharedConstNavQueryFilter NavQueryRef;
 	
-	/* Hash table containing all of the Agents.
-	* Each Agent has a guid assigned to it for identification.
-	* All Agent guids are stored in the AgentGuids array,
-	* which can be used to iterate through the entire table.
-	*/
+	/**
+	 * Hash table containing all of the Agents.
+	 * Each Agent has a guid assigned to it for identification.
+	 * All Agent guids are stored in the AgentGuids array,
+	 * which can be used to iterate through the entire table.
+	 */
 	UPROPERTY()
 	TMap<FGuid, FAgent> AgentMap;
-	/* A list of all the guids belonging to each Agent currently in
-	* the AgentMap hash table.
-	*/
+	/**
+	 * A list of all the guids belonging to each Agent currently in
+	 * the AgentMap hash table.
+	 */
 	UPROPERTY()
 	TArray<FGuid> AgentGuids;
 };
