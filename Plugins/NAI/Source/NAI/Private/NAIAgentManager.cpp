@@ -114,6 +114,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						AgentLocation.X, AgentLocation.Y,
 						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
+
 					
 					WorldRef->AsyncLineTraceByChannel(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
@@ -132,13 +133,16 @@ void ANAIAgentManager::Tick(float DeltaTime)
 							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
 
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
+
+					FCollisionObjectQueryParams ObjectQueryParams;
+					ObjectQueryParams.AddObjectTypesToQuery(ECollisionChannel::ECC_Visibility);
 					
-					WorldRef->AsyncLineTraceByChannel(
-						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
-						FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+					WorldRef->AsyncLineTraceByObjectType(
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_WorldStatic,
+						FCollisionQueryParams::DefaultQueryParam,
 						&Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate
 					);
-					
+						
 					Agent.Timers.StepCheckTime.Reset();
 				}
 				

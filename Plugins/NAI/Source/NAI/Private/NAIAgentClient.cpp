@@ -116,6 +116,7 @@ void ANAIAgentClient::BeginPlay()
 }
 
 #define ENABLE_DEBUG_DRAW_LINE true
+#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN false
 #define ENABLE_DEBUG_PRINT_SCREEN true
 
 void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
@@ -137,7 +138,7 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 	}
 	
 	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
-#if (ENABLE_DEBUG_PRINT_SCREEN)
+#if (ENABLE_FLOOR_DEBUG_PRINT_SCREEN)
 	if(GEngine)
 		GEngine->AddOnScreenDebugMessage(
 			-1, 1.0f, FColor::Yellow,
@@ -175,7 +176,7 @@ void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTrac
 	if(Data.OutHits.Num() == 0)
 	{
 		AgentManager->UpdateAgentStepCheckResult(Guid, 0.0f, false);
-		return;
+		return; 
 	}
 	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
 #if (ENABLE_DEBUG_PRINT_SCREEN)
@@ -183,7 +184,7 @@ void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTrac
 		GEngine->AddOnScreenDebugMessage(
 			-1, 1.0f, FColor::Yellow,
 			FString::Printf(TEXT("Total number non agents locs: %d"),
-			Data.OutHits.Num()));
+			Locations.Num()));
 #endif
 	if(Locations.Num() == 0)
 	{
