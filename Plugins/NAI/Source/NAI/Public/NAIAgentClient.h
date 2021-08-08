@@ -32,26 +32,30 @@ public:
 	class ANAIAgentManager *AgentManagerVariable;
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-		(ClampMin = "0", ClampMax = 1000, UIMin = 0, UIMax = 1000))
+		(ClampMin = 0, ClampMax = 1000, UIMin = 0, UIMax = 1000))
 	float MoveSpeed;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-		(ClampMin = "0", ClampMax = 1, UIMin = 0, UIMax = 1))
+		(ClampMin = 0, ClampMax = 1, UIMin = 0, UIMax = 1))
 	float LookAtRotationRate;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-			(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
+		(ClampMin = 0, ClampMax = 1000, UIMin = 0, UIMax = 1000))
+	float MaxStepHeight;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
+			(ClampMin = 0, ClampMax = 10, UIMin = 0, UIMax = 10))
 	float MoveTickInterval;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-			(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
+			(ClampMin = 0, ClampMax = 10, UIMin = 0, UIMax = 10))
 	float PathfindingTickInterval;
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
-		(ClampMin = "0", ClampMax = 10, UIMin = 0, UIMax = 10))
+		(ClampMin = 0, ClampMax = 10, UIMin = 0, UIMax = 10))
 	float AvoidanceTickInterval;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent")
 	EAgentAvoidanceLevel AvoidanceLevel;
 
 	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
+	void OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
 	void OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);

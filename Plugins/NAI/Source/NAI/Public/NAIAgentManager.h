@@ -112,6 +112,7 @@ struct NAI_API FAgentTimers
 	FAgentTimedProperty StepCheckTime;
 	
 	FAgentTimedProperty FloorCheckTimeResultAge;
+	FAgentTimedProperty StepCheckTimeResultAge;
 	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
 
@@ -124,16 +125,6 @@ struct NAI_API FAgentTimers
 #define ADVANCED_AVOIDANCE_ROWS			5
 #define AVOIDANCE_WIDTH_MULTIPLIER		1.5f
 #define AVOIDANCE_HEIGHT_MULTIPLIER		0.8f
-
-USTRUCT()
-struct NAI_API FAgentAvoidanceTaskResults
-{
-	GENERATED_BODY()
-
-	uint8 bForwardBlocked : 1;
-	uint8 bRightBlocked : 1;
-	uint8 bLeftBlocked : 1;
-};
 
 #define UP_VECTOR FVector(0.0f, 0.0f, 1.0f)
 
@@ -208,6 +199,34 @@ struct NAI_API FAgentAvoidanceProperties
 #undef ADVANCED_AVOIDANCE_ROWS
 #undef AVOIDANCE_WIDTH_MULTIPLIER
 
+USTRUCT()
+struct NAI_API FAgentStepCheckProperties
+{
+	GENERATED_BODY()
+	
+	float ForwardOffset;
+	float DownwardOffset;
+	
+	FORCEINLINE void Initialize(
+		const float InRadius,
+		const float InHalfHeight,
+		const float InMaxStepHeight)
+	{
+		ForwardOffset = (InRadius + 10.0f);
+		DownwardOffset = InHalfHeight - (InMaxStepHeight * 2.0f);
+	}
+};
+
+USTRUCT()
+struct NAI_API FAgentAvoidanceTaskResults
+{
+	GENERATED_BODY()
+
+	uint8 bForwardBlocked : 1;
+	uint8 bRightBlocked : 1;
+	uint8 bLeftBlocked : 1;
+};
+
 /**
  * Simple struct used to hold the result of each Floor Check.
  * If the floor check failed, the DetectedZPoint is set to 0.0f.
@@ -224,6 +243,17 @@ struct NAI_API FAgentFloorCheckResult
 };
 
 USTRUCT()
+struct NAI_API FAgentStepCheckResult
+{
+	GENERATED_BODY()
+
+	/** Did we detect a step on this check? */
+	uint8 bStepWasDetected : 1;
+	/** The height of the detected step, relative to the Agent. */
+	float StepHeight;
+};
+
+USTRUCT()
 struct NAI_API FAgentNavigationProperties
 {
 	GENERATED_BODY()
@@ -232,7 +262,11 @@ struct NAI_API FAgentNavigationProperties
 	/** Local copy of the delegate which is called after an Async path task completes */
 	FNavPathQueryDelegate NavPathQueryDelegate;
 
+	/** Sub-structure containing the Agent's Step Navigation properties. */
+	FAgentStepCheckProperties StepProperties;
+	
 	FTraceDelegate FloorCheckTraceDelegate;
+	FTraceDelegate StepCheckTraceDelegate;
 };
 
 USTRUCT()
@@ -250,6 +284,9 @@ struct NAI_API FAgentProperties
 	float MoveSpeed;
 	/** The speed at which the Agent will rotate into the direction it's moving. */
 	float LookAtRotationRate;
+
+	/** The maximum step height for this Agent. */
+	float MaxStepHeight;
 	
 	// Async Raytracing
 	FTraceDelegate RaytraceFrontDelegate;
@@ -315,6 +352,8 @@ struct NAI_API FAgent
 	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
 
 	FAgentFloorCheckResult LatestFloorCheckResult;
+
+	FAgentStepCheckResult LatestStepCheckResult;
 	
 	// Object that contains the timers
 	FAgentTimers Timers;
@@ -339,16 +378,16 @@ public:
 	/** Set the Agent either be halted, or not. */
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
-	/** Update the Agents PathPoints for their current navigation path */
+	/** Update the Agents PathPoints for their current navigation path. */
 	FORCEINLINE void UpdatePathPoints(const TArray<FNavPathPoint>& Points)
 	{
 		CurrentPath = Points;
 	}
 
 	/**
-	 * TODO: Document this
-	 * @param InDirection 
-	 * @param bInResult 
+	 * Update a particular direction in the LatestAvoidanceResults
+	 * @param InDirection The Direction of this trace result
+	 * @param bInResult Whether or not the trace hit an Agent.
 	 */
 	FORCEINLINE void UpdateAvoidanceResult(
 		const EAgentRaytraceDirection& InDirection,
@@ -374,16 +413,33 @@ public:
 	}
 	
 	/**
-	 * Update the LatestFloorCheckResult with new data
-	 * @param HitZPoint The Z axis value for this result
-	 * @param bSuccess Whether or not the Floor Check worked
+	 * Update the LatestFloorCheckResult with new data.
+	 * @param HitZPoint The Z axis value for this result.
+	 * @param bSuccess Whether or not the Floor Check worked.
 	*/
-	FORCEINLINE void UpdateFloorCheckResult(const float HitZPoint, const bool bSuccess)
+	FORCEINLINE void UpdateFloorCheckResult(
+		const float HitZPoint, const bool bSuccess)
 	{
 		LatestFloorCheckResult.bIsValidResult = bSuccess;
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
-		LatestFloorCheckResult.DetectedZPoint = (bSuccess) ? (HitZPoint) : (0.0f);
+		LatestFloorCheckResult.DetectedZPoint = (bSuccess) ?
+			(HitZPoint) : (0.0f);
 		Timers.FloorCheckTimeResultAge.Reset();
+	}
+
+	/**
+	 * Update the LatestStepCheckResult with new data.
+	 * @param RelativeStepHeight The height of the step relative to the Agent.
+	 * @param bStepDetected Whether or not a step was detected.
+	 */
+	FORCEINLINE void UpdateStepCheckResult(
+		const float RelativeStepHeight, const bool bStepDetected)
+	{
+		LatestStepCheckResult.bStepWasDetected = bStepDetected;
+		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
+		LatestStepCheckResult.StepHeight = (bStepDetected) ?
+			(RelativeStepHeight) : (0.0f);
+		Timers.StepCheckTimeResultAge.Reset();
 	}
 	
 	/**
@@ -398,10 +454,12 @@ public:
 		Timers.PathTime.AddTime(DeltaTime);
 		Timers.TraceTime.AddTime(DeltaTime);
 		Timers.FloorCheckTime.AddTime(DeltaTime);
+		Timers.StepCheckTime.AddTime(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Forward.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Right.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Left.AddTimeRaw(DeltaTime);
 		Timers.FloorCheckTimeResultAge.AddTimeRaw(DeltaTime);
+		Timers.StepCheckTimeResultAge.AddTimeRaw(DeltaTime);
 	}
 
 	/**
@@ -508,10 +566,15 @@ public:
 	* @param bSuccess Whether or not the Floor Check worked.
 	*/
 	FORCEINLINE void UpdateAgentFloorCheckResult(
-		const FGuid& Guid, const float HitZPoint,
-		const bool bSuccess)
+		const FGuid& Guid, const float HitZPoint, const bool bSuccess)
 	{
 		AgentMap[Guid].UpdateFloorCheckResult(HitZPoint, bSuccess);
+	}
+
+	FORCEINLINE void UpdateAgentStepCheckResult(
+		const FGuid& Guid, const float RelativeStepHeight, const bool bStepDetected)
+	{
+		AgentMap[Guid].UpdateStepCheckResult(RelativeStepHeight, bStepDetected);
 	}
 	
 private:
@@ -534,7 +597,7 @@ private:
 	 * @param Right 
 	 * @param AvoidanceProperties 
 	 */
-	void AgentTraceTaskAsync( 
+	void AgentAvoidanceTraceTaskAsync( 
 		const FVector& AgentLocation,
 		const FVector& Forward,
 		const FVector& Right,

@@ -92,33 +92,54 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					Agent.Timers.PathTime.Reset(); // Reset the timer
 				}
 
+				const FVector AgentForward = Agent.AgentClient->GetActorForwardVector();
+				const FVector AgentRight = Agent.AgentClient->GetActorRightVector();
+				
+				// Kick off an Async Trace Task if the agent is ready for one
+				if(Agent.Timers.TraceTime.bIsReady)
+				{
+					AgentAvoidanceTraceTaskAsync(
+						AgentLocation,
+						AgentForward,
+						AgentRight,
+						Agent.AgentProperties
+					);
+					
+					Agent.Timers.TraceTime.Reset();
+				}
+				
 				if(Agent.Timers.FloorCheckTime.bIsReady)
 				{
 					const FVector StartPoint = FVector(
 						AgentLocation.X, AgentLocation.Y,
 						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
-					const FVector EndPoint = StartPoint - (FVector(0.0f, 0.0f, 1.0f) * 100.0f);
+					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
 					
 					WorldRef->AsyncLineTraceByChannel(
-						EAsyncTraceType::Single, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
 						FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
 						&Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate
 					);
 					
-					Agent.Timers.PathTime.Reset();
+					Agent.Timers.FloorCheckTime.Reset();
 				}
-				
-				// Kick off an Async Trace Task if the agent is ready for one
-				if(Agent.Timers.TraceTime.bIsReady)
+
+				if(Agent.Timers.StepCheckTime.bIsReady)
 				{
-					AgentTraceTaskAsync(
-						AgentLocation,
-						Agent.AgentClient->GetActorForwardVector(),
-						Agent.AgentClient->GetActorRightVector(),
-						Agent.AgentProperties
+					const FVector StartPoint =
+						AgentLocation +
+							(AgentForward * Agent.AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
+							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
+
+					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
+					
+					WorldRef->AsyncLineTraceByChannel(
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
+						FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+						&Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate
 					);
 					
-					Agent.Timers.TraceTime.Reset();
+					Agent.Timers.StepCheckTime.Reset();
 				}
 				
 				// Handle the movement/rotation of the agent only if it is ready for one
@@ -139,9 +160,18 @@ void ANAIAgentManager::Tick(float DeltaTime)
 
 						FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
 
-						// If we need to adjust Z axis for the floor check
-						if(Agent.LatestFloorCheckResult.bIsValidResult)
+						/**
+						 * We need to check the step before the floor, since if there is a step
+						 * we want to adjust our height for that. But if we don't have a step detected
+						 * then we can just use the floor height.
+						 */
+						if(Agent.LatestStepCheckResult.bStepWasDetected)
 						{
+							NewLoc.Z = (Agent.LatestStepCheckResult.StepHeight +
+								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+						}
+						else if(Agent.LatestFloorCheckResult.bIsValidResult)
+						{			
 							NewLoc.Z = (Agent.LatestFloorCheckResult.DetectedZPoint +
 								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
@@ -216,7 +246,7 @@ void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& G
 	);
 }
 
-void ANAIAgentManager::AgentTraceTaskAsync(
+void ANAIAgentManager::AgentAvoidanceTraceTaskAsync(
 	const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
 	const FAgentProperties& AgentProperties) const
 {
