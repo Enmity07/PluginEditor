@@ -52,7 +52,6 @@ void ANAIAgentManager::Tick(float DeltaTime)
 	//	UE_LOG(LogTemp, Warning, TEXT("---End---"));
 	//}
 
-	
 	if(WorldRef)
 	{
 		const int AgentCount = AgentMap.Num();
@@ -60,15 +59,15 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		{
 			for(int i = 0; i < AgentCount; i++)
 			{
-				// Get the Guid and use it to get a copy of the agent
+				// Get the Guid for this iteration, and use it to get a copy of the agent
 				const FGuid Guid = AgentGuids[i];
 				FAgent Agent = AgentMap[Guid];
 
 				// Update all the agents timers for their tasks
 				Agent.UpdateTimers(DeltaTime);
 
-				// Calculate the Agents Speed and update the property on the AgentClient object
 				const FVector AgentLocation = Agent.AgentClient->GetActorLocation();
+				// Calculate the Agents Speed and update the property on the AgentClient object
 				Agent.CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
 
 				// If the Agent has been set to stop, don't do anything
@@ -77,7 +76,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		            continue;
 		        }
 
-				// Kick of an Async Path Task if the agent is ready for one
+				/** Execute the Pathfinding Task TODO: Doc this properly */
 				if(Agent.Timers.PathTime.bIsReady)
 				{
 					// Get the Goal Location from the Agent type
@@ -95,7 +94,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 				const FVector AgentForward = Agent.AgentClient->GetActorForwardVector();
 				const FVector AgentRight = Agent.AgentClient->GetActorRightVector();
 				
-				// Kick off an Async Trace Task if the agent is ready for one
+				/** Execute the avoidance task TODO: Doc this properly */
 				if(Agent.Timers.TraceTime.bIsReady)
 				{
 					AgentAvoidanceTraceTaskAsync(
@@ -107,38 +106,43 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					
 					Agent.Timers.TraceTime.Reset();
 				}
-				
+
+				/**
+				 * The Object types to query for AsyncLineTraceByObjectType calls.
+				 * This convert each ECC_XXXX channel to a bitfield, add more channels with the |
+				 * operator. Read the comments on the FCollisionObjectQueryParams type for more info.
+				 */
+				const FCollisionObjectQueryParams ObjectQueryParams =
+					(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
+
+				/** Conduct the floor check TODO: Doc this properly */
 				if(Agent.Timers.FloorCheckTime.bIsReady)
 				{
 					const FVector StartPoint = FVector(
 						AgentLocation.X, AgentLocation.Y,
-						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight + 1.0f)));
+						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight - 1.0f)));
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
-
 					
-					WorldRef->AsyncLineTraceByChannel(
-						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_Visibility,
-						FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+					WorldRef->AsyncLineTraceByObjectType(
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
+						FCollisionQueryParams::DefaultQueryParam,
 						&Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate
 					);
 					
 					Agent.Timers.FloorCheckTime.Reset();
 				}
 
+				/** Execute the step check task TODO: Doc this properly */
 				if(Agent.Timers.StepCheckTime.bIsReady)
 				{
 					const FVector StartPoint =
 						AgentLocation +
 							(AgentForward * Agent.AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
 							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
-
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
-
-					FCollisionObjectQueryParams ObjectQueryParams;
-					ObjectQueryParams.AddObjectTypesToQuery(ECollisionChannel::ECC_Visibility);
 					
 					WorldRef->AsyncLineTraceByObjectType(
-						EAsyncTraceType::Multi, StartPoint, EndPoint, ECollisionChannel::ECC_WorldStatic,
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
 						&Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate
 					);
@@ -146,7 +150,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					Agent.Timers.StepCheckTime.Reset();
 				}
 				
-				// Handle the movement/rotation of the agent only if it is ready for one
+				/** Execute the movement task TODO: Doc this properly */
 				if(Agent.Timers.MoveTime.bIsReady)
 				{
 					// No reason to move if we don't have a path
@@ -163,11 +167,12 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						const FVector Direction = (End - Start).GetSafeNormal();
 
 						FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
-
-						/**
+						
+						/** 
 						 * We need to check the step before the floor, since if there is a step
 						 * we want to adjust our height for that. But if we don't have a step detected
 						 * then we can just use the floor height.
+						 * TODO: This can be better..
 						 */
 						if(Agent.LatestStepCheckResult.bStepWasDetected)
 						{
@@ -191,7 +196,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						);
 
 						// We directly move the agent by moving it's root component as it avoids a shit load
-						// of unnecessary wrapper functions, along with extra GetActorLocation() function calls
+						// of function calls, along with extra GetActorLocation() function calls
 						// when we already have the agents location in this scope, before we finally get to this function
 						// so we're directly calling it here instead of SetActorLocation() / SetActorRotation()
 						Agent.AgentClient->GetRootComponent()->MoveComponent(MoveDelta, LerpRotation, true);
@@ -336,9 +341,9 @@ void ANAIAgentManager::AgentAvoidanceTraceTaskAsync(
 					((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
 				const FVector CurrentEndPoint = CurrentStartPoint + (RelativeForward * 50.0f);
 
-				WorldRef->AsyncLineTraceByChannel(
-					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Visibility,
-					FCollisionQueryParams::DefaultQueryParam, FCollisionResponseParams::DefaultResponseParam,
+				WorldRef->AsyncLineTraceByObjectType(
+					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Pawn,
+					FCollisionQueryParams::DefaultQueryParam,
 					&TraceDirectionDelegate
 				);
 			}

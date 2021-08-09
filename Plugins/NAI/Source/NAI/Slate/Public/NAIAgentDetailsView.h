@@ -3,10 +3,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+
+#include "DetailLayoutBuilder.h"
 #include "IDetailCustomization.h"
 #include "Widgets/Input/SSpinBox.h"
 
 #include "NAIAgentSettingsGlobals.h"
+#include "Widgets/Input/SEditableTextBox.h"
 
 // Custom details view for the AgentClient class
 class NAI_API FCustomAgentClientDetailsPanel : public IDetailCustomization

@@ -17,12 +17,11 @@
  * Simple enum used to categorize each set of Raytraces done
  * during each Agent's avoidance calculations.
  */
-UENUM()
-enum class EAgentRaytraceDirection : uint8
+enum class NAI_API EAgentRaytraceDirection : uint8
 {
-	TracingFront UMETA(DisplayName = "TracingFront"),
-	TracingLeft UMETA(DisplayName = "TracingLeft"),
-	TracingRight UMETA(DisplayName = "TracingRight"),
+	TracingFront,
+	TracingLeft,
+	TracingRight,
 };
 
 /**
@@ -31,10 +30,8 @@ enum class EAgentRaytraceDirection : uint8
  * The timer then has to be reset to be used again.
  * @biref Specialist timer for use by the Agents.
  */
-USTRUCT()
 struct NAI_API FAgentTimedProperty
 {
-	GENERATED_BODY()
 
 	/** The tick/time interval this timer should become "ready" at. */
 	float TickRate;
@@ -89,21 +86,15 @@ struct NAI_API FAgentTimedProperty
 	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
 };
 
-USTRUCT()
 struct NAI_API FAgentAvoidanceResultTimers
 {
-	GENERATED_BODY()
-	
 	FAgentTimedProperty Forward;
 	FAgentTimedProperty Right;
 	FAgentTimedProperty Left;
 };
 
-USTRUCT()
 struct NAI_API FAgentTimers
 {
-	GENERATED_BODY()
-
 	FAgentTimedProperty MoveTime;
 	FAgentTimedProperty PathTime;
 	FAgentTimedProperty TraceTime;
@@ -128,11 +119,8 @@ struct NAI_API FAgentTimers
 
 #define UP_VECTOR FVector(0.0f, 0.0f, 1.0f)
 
-USTRUCT()
 struct NAI_API FAgentAvoidanceProperties
 {
-	GENERATED_BODY()
-
 	EAgentAvoidanceLevel AvoidanceLevel;
 	float GridWidth;
 	float GridHalfWidth;
@@ -199,11 +187,8 @@ struct NAI_API FAgentAvoidanceProperties
 #undef ADVANCED_AVOIDANCE_ROWS
 #undef AVOIDANCE_WIDTH_MULTIPLIER
 
-USTRUCT()
 struct NAI_API FAgentStepCheckProperties
 {
-	GENERATED_BODY()
-	
 	float ForwardOffset;
 	float DownwardOffset;
 	
@@ -212,16 +197,13 @@ struct NAI_API FAgentStepCheckProperties
 		const float InHalfHeight,
 		const float InMaxStepHeight)
 	{
-		ForwardOffset = (InRadius + 10.0f);
+		ForwardOffset = (InRadius + 1.0f);
 		DownwardOffset = InHalfHeight - (InMaxStepHeight * 2.0f);
 	}
 };
 
-USTRUCT()
 struct NAI_API FAgentAvoidanceTaskResults
 {
-	GENERATED_BODY()
-
 	uint8 bForwardBlocked : 1;
 	uint8 bRightBlocked : 1;
 	uint8 bLeftBlocked : 1;
@@ -231,33 +213,24 @@ struct NAI_API FAgentAvoidanceTaskResults
  * Simple struct used to hold the result of each Floor Check.
  * If the floor check failed, the DetectedZPoint is set to 0.0f.
  */
-USTRUCT()
 struct NAI_API FAgentFloorCheckResult
 {
-	GENERATED_BODY()
-	
 	/** Result may be invalid if the trace didn't hit anything */
 	uint8 bIsValidResult : 1;
 	/** Float that represents the Z point of the hit location if we hit one */
 	float DetectedZPoint;
 };
 
-USTRUCT()
 struct NAI_API FAgentStepCheckResult
 {
-	GENERATED_BODY()
-
 	/** Did we detect a step on this check? */
 	uint8 bStepWasDetected : 1;
 	/** The height of the detected step, relative to the Agent. */
 	float StepHeight;
 };
 
-USTRUCT()
 struct NAI_API FAgentNavigationProperties
 {
-	GENERATED_BODY()
-
 	FNavAgentProperties NavAgentProperties;
 	/** Local copy of the delegate which is called after an Async path task completes */
 	FNavPathQueryDelegate NavPathQueryDelegate;
@@ -269,11 +242,8 @@ struct NAI_API FAgentNavigationProperties
 	FTraceDelegate StepCheckTraceDelegate;
 };
 
-USTRUCT()
 struct NAI_API FAgentProperties
 {
-	GENERATED_BODY()
-
 	/** The type of Agent. */
 	EAgentType AgentType;
 	/** The Radius of the Agent's Capsule collider. */

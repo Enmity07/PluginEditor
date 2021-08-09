@@ -117,7 +117,7 @@ void ANAIAgentClient::BeginPlay()
 
 #define ENABLE_DEBUG_DRAW_LINE true
 #define ENABLE_FLOOR_DEBUG_PRINT_SCREEN false
-#define ENABLE_DEBUG_PRINT_SCREEN true
+#define ENABLE_DEBUG_PRINT_SCREEN false
 
 void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
 {

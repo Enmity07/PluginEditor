@@ -17,17 +17,11 @@
 	"Modules": [
 		{
 			"Name": "NAI",
-			"Type": "Runtime",
+			"Type": "Editor",
 			"LoadingPhase": "Default",
 			"WhitelistPlatforms": [
 				"Win64"
 			]
-		}
-	],
-	"Plugins": [
-		{
-			"Name": "AlembicImporter",
-			"Enabled": true
 		}
 	]
 }

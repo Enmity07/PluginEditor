@@ -35,7 +35,7 @@ public class NAI : ModuleRules
 				"Projects",
 				"AssetTools",
 				"UnrealEd",
-				"AlembicLibrary",
+				//"AlembicLibrary",
 				// ... add other public dependencies that you statically link with here ...
 			}
 			);
