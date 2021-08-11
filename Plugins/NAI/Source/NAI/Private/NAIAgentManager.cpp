@@ -36,7 +36,7 @@ void ANAIAgentManager::BeginPlay()
 */
 #define ENABLE_DEBUG_DRAW_LINE true
 
-void ANAIAgentManager::Tick(float DeltaTime)
+void ANAIAgentManager::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
@@ -77,7 +77,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 		        }
 
 				/** Execute the Pathfinding Task TODO: Doc this properly */
-				if(Agent.Timers.PathTime.bIsReady)
+				if(Agent.PathTask.IsReady())
 				{
 					// Get the Goal Location from the Agent type
 					// the pathfinding can be radically different between types
@@ -88,7 +88,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
 					
 					AgentPathTaskAsync(AgentLocation, GoalLocation, Agent.AgentProperties.NavigationProperties); // start the task
-					Agent.Timers.PathTime.Reset(); // Reset the timer
+					Agent.PathTask.Reset(); // Reset the timer
 				}
 
 				const FVector AgentForward = Agent.AgentClient->GetActorForwardVector();
@@ -116,7 +116,7 @@ void ANAIAgentManager::Tick(float DeltaTime)
 					(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
 
 				/** Conduct the floor check TODO: Doc this properly */
-				if(Agent.Timers.FloorCheckTime.bIsReady)
+				if(Agent.FloorCheckTask.IsReady())
 				{
 					const FVector StartPoint = FVector(
 						AgentLocation.X, AgentLocation.Y,
@@ -129,11 +129,11 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						&Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate
 					);
 					
-					Agent.Timers.FloorCheckTime.Reset();
+					Agent.FloorCheckTask.Reset();
 				}
 
 				/** Execute the step check task TODO: Doc this properly */
-				if(Agent.Timers.StepCheckTime.bIsReady)
+				if(Agent.StepCheckTask.IsReady())
 				{
 					const FVector StartPoint =
 						AgentLocation +
@@ -147,18 +147,20 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						&Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate
 					);
 						
-					Agent.Timers.StepCheckTime.Reset();
+					Agent.StepCheckTask.Reset();
 				}
 				
 				/** Execute the movement task TODO: Doc this properly */
 				if(Agent.Timers.MoveTime.bIsReady)
 				{
+					const TArray<FNavPathPoint> PathPoints = Agent.PathTask.GetResult();
+					
 					// No reason to move if we don't have a path
-					if(Agent.CurrentPath.Num() > 1) // Need at least 2 path points for it to be a path
+					if(PathPoints.Num() > 1) // Need at least 2 path points for it to be a path
 					{			
 						// Calculate the new FVector for this move update
-						const FVector Start = Agent.CurrentPath[0];
-						const FVector End = Agent.CurrentPath[1];
+						const FVector Start = PathPoints[0].Location;
+						const FVector End = PathPoints[1].Location;
 #if (ENABLE_DEBUG_DRAW_LINE)
 						DrawDebugLine(WorldRef, Start, End, FColor(0, 255, 0),
                         	false, 2, 0, 2.0f);
@@ -174,14 +176,14 @@ void ANAIAgentManager::Tick(float DeltaTime)
 						 * then we can just use the floor height.
 						 * TODO: This can be better..
 						 */
-						if(Agent.LatestStepCheckResult.bStepWasDetected)
+						if(Agent.StepCheckTask.GetResult().bIsValidResult)
 						{
-							NewLoc.Z = (Agent.LatestStepCheckResult.StepHeight +
+							NewLoc.Z = (Agent.StepCheckTask.GetResult().DetectedHitLocation.Z +
 								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
-						else if(Agent.LatestFloorCheckResult.bIsValidResult)
+						else if(Agent.FloorCheckTask.GetResult().bIsValidResult)
 						{			
-							NewLoc.Z = (Agent.LatestFloorCheckResult.DetectedZPoint +
+							NewLoc.Z = (Agent.FloorCheckTask.GetResult().DetectedHitLocation.Z +
 								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
 

@@ -86,6 +86,38 @@ struct NAI_API FAgentTimedProperty
 	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
 };
 
+template<typename TResultType>
+struct NAI_API TAgentResultContainer
+{
+	TResultType Result;
+	FAgentTimedProperty Age;
+};
+
+template<typename TResultType>
+struct NAI_API TAgentTaskProperties
+{
+	FORCEINLINE void SetupTaskTimer(const float InTickRate)
+	{
+		TaskTimer.TickRate = InTickRate;
+	}
+	FORCEINLINE void IncrementTimers(const float DeltaTime)
+	{
+		TaskTimer.AddTime(DeltaTime); ResultContainer.Age.AddTimeRaw(DeltaTime);
+	}
+	FORCEINLINE void Reset() { TaskTimer.Reset(); }	
+	FORCEINLINE uint8 IsReady() { return TaskTimer.bIsReady; }
+	
+	FORCEINLINE TResultType& GetResult() { return ResultContainer.Result; }
+	FORCEINLINE void SetResult(const TResultType& InResult)
+	{
+		ResultContainer.Result = InResult;
+		ResultContainer.Age.Reset();
+	}
+private:
+	FAgentTimedProperty TaskTimer;
+	TAgentResultContainer<TResultType> ResultContainer;
+};
+
 struct NAI_API FAgentAvoidanceResultTimers
 {
 	FAgentTimedProperty Forward;
@@ -96,14 +128,8 @@ struct NAI_API FAgentAvoidanceResultTimers
 struct NAI_API FAgentTimers
 {
 	FAgentTimedProperty MoveTime;
-	FAgentTimedProperty PathTime;
 	FAgentTimedProperty TraceTime;
-
-	FAgentTimedProperty FloorCheckTime;
-	FAgentTimedProperty StepCheckTime;
 	
-	FAgentTimedProperty FloorCheckTimeResultAge;
-	FAgentTimedProperty StepCheckTimeResultAge;
 	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
 
@@ -202,6 +228,21 @@ struct NAI_API FAgentStepCheckProperties
 	}
 };
 
+struct NAI_API FAgentTraceResult
+{
+	/** Result may be invalid if the trace didnt hit anything */
+	uint8 bIsValidResult : 1;
+	/** Vector that represents  the hit location if we hit one */
+	FVector DetectedHitLocation;
+
+	FAgentTraceResult() { bIsValidResult = false, DetectedHitLocation = FVector(); }
+	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
+	{
+		bIsValidResult = InIsValid;
+		DetectedHitLocation = InLocation;
+	}
+};
+
 struct NAI_API FAgentAvoidanceTaskResults
 {
 	uint8 bForwardBlocked : 1;
@@ -209,24 +250,13 @@ struct NAI_API FAgentAvoidanceTaskResults
 	uint8 bLeftBlocked : 1;
 };
 
-/**
- * Simple struct used to hold the result of each Floor Check.
- * If the floor check failed, the DetectedZPoint is set to 0.0f.
- */
-struct NAI_API FAgentFloorCheckResult
+struct NAI_API FAgentAvoidanceTaskResult
 {
-	/** Result may be invalid if the trace didn't hit anything */
-	uint8 bIsValidResult : 1;
-	/** Float that represents the Z point of the hit location if we hit one */
-	float DetectedZPoint;
-};
-
-struct NAI_API FAgentStepCheckResult
-{
-	/** Did we detect a step on this check? */
-	uint8 bStepWasDetected : 1;
-	/** The height of the detected step, relative to the Agent. */
-	float StepHeight;
+	EAgentRaytraceDirection Direction;
+	
+	uint8 bForwardBlocked : 1;
+	uint8 bRightBlocked : 1;
+	uint8 bLeftBlocked : 1;
 };
 
 struct NAI_API FAgentNavigationProperties
@@ -310,7 +340,10 @@ struct NAI_API FAgent
 	 * a delegate on the AgentClient which will in turn update this
 	 * with a new path for the Agent.
 	 */
-	TArray<FNavPathPoint> CurrentPath;
+	TAgentTaskProperties<TArray<FNavPathPoint>> PathTask;
+
+	TAgentTaskProperties<FAgentTraceResult> FloorCheckTask;
+	TAgentTaskProperties<FAgentTraceResult> StepCheckTask;
 
 	/**
 	 * The latest results for Each Avoidance Trace direction
@@ -320,10 +353,6 @@ struct NAI_API FAgent
 	 * ...this should only be relevant when the frame rate is very low
 	 */
 	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
-
-	FAgentFloorCheckResult LatestFloorCheckResult;
-
-	FAgentStepCheckResult LatestStepCheckResult;
 	
 	// Object that contains the timers
 	FAgentTimers Timers;
@@ -349,9 +378,9 @@ public:
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
 	/** Update the Agents PathPoints for their current navigation path. */
-	FORCEINLINE void UpdatePathPoints(const TArray<FNavPathPoint>& Points)
+	FORCEINLINE void UpdatePathTaskResults(const TArray<FNavPathPoint>& Points)
 	{
-		CurrentPath = Points;
+		PathTask.SetResult(Points);
 	}
 
 	/**
@@ -384,32 +413,36 @@ public:
 	
 	/**
 	 * Update the LatestFloorCheckResult with new data.
-	 * @param HitZPoint The Z axis value for this result.
+	 * @param HitLocation The Z axis value for this result.
 	 * @param bSuccess Whether or not the Floor Check worked.
 	*/
 	FORCEINLINE void UpdateFloorCheckResult(
-		const float HitZPoint, const bool bSuccess)
+		const FVector& HitLocation, const bool bSuccess)
 	{
-		LatestFloorCheckResult.bIsValidResult = bSuccess;
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
-		LatestFloorCheckResult.DetectedZPoint = (bSuccess) ?
-			(HitZPoint) : (0.0f);
-		Timers.FloorCheckTimeResultAge.Reset();
+		const FAgentTraceResult NewResult = FAgentTraceResult(
+			bSuccess,
+			(bSuccess) ? (HitLocation) : (FVector())
+		);
+
+		FloorCheckTask.SetResult(NewResult);
 	}
 
 	/**
 	 * Update the LatestStepCheckResult with new data.
-	 * @param RelativeStepHeight The height of the step relative to the Agent.
+	 * @param HitLocation The height of the step relative to the Agent.
 	 * @param bStepDetected Whether or not a step was detected.
 	 */
 	FORCEINLINE void UpdateStepCheckResult(
-		const float RelativeStepHeight, const bool bStepDetected)
+		const FVector& HitLocation, const bool bStepDetected)
 	{
-		LatestStepCheckResult.bStepWasDetected = bStepDetected;
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
-		LatestStepCheckResult.StepHeight = (bStepDetected) ?
-			(RelativeStepHeight) : (0.0f);
-		Timers.StepCheckTimeResultAge.Reset();
+		const FAgentTraceResult NewResult = FAgentTraceResult(
+			bStepDetected,
+			(bStepDetected) ? (HitLocation) : (FVector())
+		);
+		
+		StepCheckTask.SetResult(NewResult);
 	}
 	
 	/**
@@ -420,16 +453,16 @@ public:
 	*/
 	FORCEINLINE void UpdateTimers(const float DeltaTime)
 	{
+		PathTask.IncrementTimers(DeltaTime);
+
+		FloorCheckTask.IncrementTimers(DeltaTime);
+		
+		StepCheckTask.IncrementTimers(DeltaTime);
+		
 		Timers.MoveTime.AddTime(DeltaTime);
-		Timers.PathTime.AddTime(DeltaTime);
-		Timers.TraceTime.AddTime(DeltaTime);
-		Timers.FloorCheckTime.AddTime(DeltaTime);
-		Timers.StepCheckTime.AddTime(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Forward.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Right.AddTimeRaw(DeltaTime);
 		Timers.AvoidanceResultAgeTimers.Left.AddTimeRaw(DeltaTime);
-		Timers.FloorCheckTimeResultAge.AddTimeRaw(DeltaTime);
-		Timers.StepCheckTimeResultAge.AddTimeRaw(DeltaTime);
 	}
 
 	/**
@@ -512,7 +545,7 @@ public:
 	FORCEINLINE void UpdateAgentPath(
 		const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints)
 	{
-		AgentMap[Guid].UpdatePathPoints(PathPoints);
+		AgentMap[Guid].UpdatePathTaskResults(PathPoints);
 	}
 	
 	/**
@@ -532,19 +565,19 @@ public:
 	/**
 	* Update the LatestFloorCheckResult of a particular Agent.
 	* @param Guid The Guid of the Agent to update.
-	* @param HitZPoint The Z axis value for this result.
+	* @param HitLocation The location for this result.
 	* @param bSuccess Whether or not the Floor Check worked.
 	*/
 	FORCEINLINE void UpdateAgentFloorCheckResult(
-		const FGuid& Guid, const float HitZPoint, const bool bSuccess)
+		const FGuid& Guid, const FVector& HitLocation, const bool bSuccess)
 	{
-		AgentMap[Guid].UpdateFloorCheckResult(HitZPoint, bSuccess);
+		AgentMap[Guid].UpdateFloorCheckResult(HitLocation, bSuccess);
 	}
 
 	FORCEINLINE void UpdateAgentStepCheckResult(
-		const FGuid& Guid, const float RelativeStepHeight, const bool bStepDetected)
+		const FGuid& Guid, const FVector& HitLocation, const bool bStepDetected)
 	{
-		AgentMap[Guid].UpdateStepCheckResult(RelativeStepHeight, bStepDetected);
+		AgentMap[Guid].UpdateStepCheckResult(HitLocation, bStepDetected);
 	}
 	
 private:
@@ -565,13 +598,13 @@ private:
 	 * @param AgentLocation 
 	 * @param Forward 
 	 * @param Right 
-	 * @param AvoidanceProperties 
+	 * @param AgentProperties 
 	 */
 	void AgentAvoidanceTraceTaskAsync( 
 		const FVector& AgentLocation,
 		const FVector& Forward,
 		const FVector& Right,
-		const FAgentProperties& AvoidanceProperties
+		const FAgentProperties& AgentProperties
 	) const;
 	
 	// TODO: Not sure why i didn't inline this..

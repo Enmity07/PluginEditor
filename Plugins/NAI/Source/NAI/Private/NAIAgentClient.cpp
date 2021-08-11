@@ -75,12 +75,14 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentProperties.MoveSpeed = MoveSpeed;
 		Agent.AgentProperties.LookAtRotationRate = LookAtRotationRate;
 		Agent.AgentProperties.MaxStepHeight = MaxStepHeight;
+		
 		Agent.Timers.MoveTime.TickRate = MoveTickInterval;
-		Agent.Timers.PathTime.TickRate = PathfindingTickInterval;
 		Agent.Timers.TraceTime.TickRate = AvoidanceTickInterval;
-		Agent.Timers.FloorCheckTime.TickRate = 0.01f;
-		Agent.Timers.StepCheckTime.TickRate = 0.01f;
 
+		Agent.PathTask.SetupTaskTimer(PathfindingTickInterval);
+		Agent.FloorCheckTask.SetupTaskTimer(0.01f);
+		Agent.StepCheckTask.SetupTaskTimer(0.01f);
+		
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentRadius =
 			Agent.AgentProperties.CapsuleRadius;
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentHeight =
@@ -133,7 +135,7 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 #endif
 	if(Data.OutHits.Num() == 0)
 	{
-		AgentManager->UpdateAgentFloorCheckResult(Guid, 0.0f, false);
+		AgentManager->UpdateAgentFloorCheckResult(Guid, FVector(), false);
 		return;
 	}
 	
@@ -147,18 +149,19 @@ void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTra
 #endif
 	if(Locations.Num() == 0)
 	{
-		AgentManager->UpdateAgentFloorCheckResult(Guid, 0.0f, false);
+		AgentManager->UpdateAgentFloorCheckResult(Guid, FVector(), false);
 		return;
 	}
 	
-	TArray<float> HitZPoints;
+	FVector HighestVector = FVector();
 	for(int i = 0; i < Locations.Num(); i++)
 	{
-		HitZPoints.Add(Locations[i].Z);
+		if(Locations[i].Z > HighestVector.Z)
+		{
+			HighestVector = Locations[i];
+		}
 	}
-	HitZPoints.Sort();
-	const float HighestValue = HitZPoints.Last();
-	AgentManager->UpdateAgentFloorCheckResult(Guid, HighestValue, true);
+	AgentManager->UpdateAgentFloorCheckResult(Guid, HighestVector, true);
 }
 
 void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
@@ -175,7 +178,7 @@ void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTrac
 #endif
 	if(Data.OutHits.Num() == 0)
 	{
-		AgentManager->UpdateAgentStepCheckResult(Guid, 0.0f, false);
+		AgentManager->UpdateAgentStepCheckResult(Guid, FVector(), false);
 		return; 
 	}
 	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
@@ -188,18 +191,19 @@ void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTrac
 #endif
 	if(Locations.Num() == 0)
 	{
-		AgentManager->UpdateAgentStepCheckResult(Guid, 0.0f, false);
+		AgentManager->UpdateAgentStepCheckResult(Guid, FVector(), false);
 		return;
 	}
-	
-	TArray<float> HitZPoints;
+
+	FVector HighestVector = FVector();
 	for(int i = 0; i < Locations.Num(); i++)
 	{
-		HitZPoints.Add(Locations[i].Z);
+		if(Locations[i].Z > HighestVector.Z)
+		{
+			HighestVector = Locations[i];
+		}
 	}
-	HitZPoints.Sort();
-	const float HighestValue = HitZPoints.Last();
-	AgentManager->UpdateAgentStepCheckResult(Guid, HighestValue, true);
+	AgentManager->UpdateAgentStepCheckResult(Guid, HighestVector, true);
 }
 
 void ANAIAgentClient::OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer)
