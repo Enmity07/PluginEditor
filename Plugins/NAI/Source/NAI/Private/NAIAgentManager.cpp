@@ -80,9 +80,6 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				if(Agent.PathTask.IsReady())
 				{
 					// Get the Goal Location from the Agent type
-					// the pathfinding can be radically different between types
-					// so GetAgentGoalLocationFromType() determines what vector we need
-					// for the async pathfinding task
 					const FVector PlayerLocation = GetActorLocation(); // TODO: GET THE PLAYER!!!
 					const EAgentType AgentType = Agent.AgentProperties.AgentType;
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
@@ -94,17 +91,41 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				const FVector AgentForward = Agent.AgentClient->GetActorForwardVector();
 				const FVector AgentRight = Agent.AgentClient->GetActorRightVector();
 				
-				/** Execute the avoidance task TODO: Doc this properly */
-				if(Agent.Timers.TraceTime.bIsReady)
+				/** Execute the Front avoidance task TODO: Doc this properly */
+				if(Agent.AvoidanceFrontTask.IsReady())
 				{
 					AgentAvoidanceTraceTaskAsync(
-						AgentLocation,
-						AgentForward,
-						AgentRight,
-						Agent.AgentProperties
+						EAgentAvoidanceTraceDirection::TracingFront,
+						AgentLocation, AgentForward, AgentRight, Agent.AgentProperties
 					);
 					
-					Agent.Timers.TraceTime.Reset();
+					Agent.AvoidanceFrontTask.Reset();
+				}
+
+				/** Is there something in front of the Agent? */
+				if(Agent.AvoidanceFrontTask.GetResult().IsBlocked())
+				{
+					/** Check both sides to see which way the Agent can strafe. */
+					
+					if(Agent.AvoidanceRightTask.IsReady())
+					{
+						AgentAvoidanceTraceTaskAsync(
+							EAgentAvoidanceTraceDirection::TracingRight,
+							AgentLocation, AgentForward, AgentRight, Agent.AgentProperties
+						);
+
+						Agent.AvoidanceRightTask.Reset();
+					}
+					
+					if(Agent.AvoidanceLeftTask.IsReady())
+					{
+						AgentAvoidanceTraceTaskAsync(
+							EAgentAvoidanceTraceDirection::TracingLeft,
+							AgentLocation, AgentForward, AgentRight, Agent.AgentProperties
+						);
+
+						Agent.AvoidanceLeftTask.Reset();
+					}
 				}
 
 				/**
@@ -153,7 +174,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				/** Execute the movement task TODO: Doc this properly */
 				if(Agent.Timers.MoveTime.bIsReady)
 				{
-					const TArray<FNavPathPoint> PathPoints = Agent.PathTask.GetResult();
+					const TArray<FNavPathPoint> PathPoints = Agent.PathTask.GetResult().Points;
 					
 					// No reason to move if we don't have a path
 					if(PathPoints.Num() > 1) // Need at least 2 path points for it to be a path
@@ -207,7 +228,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					Agent.Timers.MoveTime.Reset();
 				}
 				
-				// Update the agent in the map to apply the changes we've made this tick
+				/** Update the agent in the map to apply the changes we've made this tick */ // TODO: Don't need to copy the whole thing, just the task changes
 				AgentMap[Guid] = Agent;
 			}
 		}
@@ -258,104 +279,94 @@ void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& G
 }
 
 void ANAIAgentManager::AgentAvoidanceTraceTaskAsync(
+	const EAgentAvoidanceTraceDirection& TraceDirection,
 	const FVector& AgentLocation, const FVector& Forward, const FVector& Right,
 	const FAgentProperties& AgentProperties) const
 {
-	// Lambda for each trace to avoid creating another function.
-	// We can capture the variables passed to this function by reference
-	// so no need to pass them trough to another function, which would be a mess
-	auto DoTraceTask = [&](const EAgentRaytraceDirection& TraceDirectionType)
+	FTraceDelegate TraceDirectionDelegate;
+	FVector RelativeForward;
+	FVector RelativeRight;
+
+	// Initialize everything...
+	// We check the TraceDirection several times instead of using an if statement for all of them,
+	// because we want the variables to be const. The compiler will optimize out the multiple identical
+	// condition checks anyway
+
+	const uint8 Columns = (TraceDirection == EAgentAvoidanceTraceDirection::TracingFront) ?
+		(AgentProperties.AvoidanceProperties.GridColumns) :
+		(AgentProperties.AvoidanceProperties.SideColumns);
+
+	const uint8 Rows = (TraceDirection == EAgentAvoidanceTraceDirection::TracingFront) ?
+		(AgentProperties.AvoidanceProperties.GridRows) :
+		(AgentProperties.AvoidanceProperties.SideRows)
+	;
+	
+	const float WidthIncrementSize =
+		(TraceDirection == EAgentAvoidanceTraceDirection::TracingFront) ?
+			(AgentProperties.AvoidanceProperties.WidthIncrementSize) :
+			(AgentProperties.AvoidanceProperties.SideWidthIncrementSize)
+	;
+	
+	const float HeightIncrementSize = AgentProperties.AvoidanceProperties.HeightIncrementSize;
+	
+	const float StartOffsetWidth =
+		(TraceDirection == EAgentAvoidanceTraceDirection::TracingFront) ?
+			(AgentProperties.AvoidanceProperties.StartOffsetWidth) :
+			(AgentProperties.AvoidanceProperties.SideStartOffsetWidth)
+	;
+
+	// We don't need to calculate the Height every time like the width,
+	// since the "up" vector is always the same amount in the Z axis,
+	// so the height is precalculated in the Initialize() function of the
+	// FAgentAvoidanceProperties struct in NAIAgentManager.h
+	const FVector StartOffsetHeightVector =
+		(TraceDirection == EAgentAvoidanceTraceDirection::TracingFront) ?
+			(AgentProperties.AvoidanceProperties.StartOffsetHeightVector) :
+			(AgentProperties.AvoidanceProperties.SideStartOffsetHeightVector)
+	;
+	
+	switch(TraceDirection)
 	{
-		FTraceDelegate TraceDirectionDelegate;
-		FVector RelativeForward;
-		FVector RelativeRight;
+		case EAgentAvoidanceTraceDirection::TracingFront:
+			
+			TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
+			RelativeForward = Forward;
+			RelativeRight = Right;
+			break;
+		case EAgentAvoidanceTraceDirection::TracingLeft:
+			TraceDirectionDelegate = AgentProperties.RaytraceLeftDelegate;
+			RelativeForward = -Right;
+			RelativeRight = -Forward;
+			break;
+		case EAgentAvoidanceTraceDirection::TracingRight:
+			TraceDirectionDelegate = AgentProperties.RaytraceRightDelegate;
+			RelativeForward = Right;
+			RelativeRight = Forward;
+			break;
+		default:
+			break;
+	}
 
-		// Initialize everything...
-		// We check the TraceDirectionType several times instead of using an if statement for all of them,
-		// because we want the variables to be const. The compiler will optimize out the multiple identical
-		// condition checks anyway
+	const FVector ForwardOffset = RelativeForward * (AgentProperties.CapsuleRadius + 1.0f);
+	const FVector RightOffset = RelativeRight * StartOffsetWidth;
+	const FVector StartingPoint = (((AgentLocation +ForwardOffset) + RightOffset) + StartOffsetHeightVector);
 
-		const uint8 Columns = (TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
-			(AgentProperties.AvoidanceProperties.GridColumns) :
-			(AgentProperties.AvoidanceProperties.SideColumns);
-
-		const uint8 Rows = (TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
-			(AgentProperties.AvoidanceProperties.GridRows) :
-			(AgentProperties.AvoidanceProperties.SideRows)
-		;
-		
-		const float WidthIncrementSize =
-			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
-				(AgentProperties.AvoidanceProperties.WidthIncrementSize) :
-				(AgentProperties.AvoidanceProperties.SideWidthIncrementSize)
-		;
-		
-		const float HeightIncrementSize = AgentProperties.AvoidanceProperties.HeightIncrementSize;
-		
-		const float StartOffsetWidth =
-			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
-				(AgentProperties.AvoidanceProperties.StartOffsetWidth) :
-				(AgentProperties.AvoidanceProperties.SideStartOffsetWidth)
-		;
-
-		// We don't need to calculate the Height every time like the width,
-		// since the "up" vector is always the same amount in the Z axis,
-		// so the height is precalculated in the Initialize() function of the
-		// FAgentAvoidanceProperties struct in NAIAgentManager.h
-		const FVector StartOffsetHeightVector =
-			(TraceDirectionType == EAgentRaytraceDirection::TracingFront) ?
-				(AgentProperties.AvoidanceProperties.StartOffsetHeightVector) :
-				(AgentProperties.AvoidanceProperties.SideStartOffsetHeightVector)
-		;
-		
-		switch(TraceDirectionType)
+	for(uint8 i = 0; i < Rows; i++) // Vertical Traces
+	{
+		for(uint8 j = 0; j < Columns; j++) // Horizontal Traces
 		{
-			case EAgentRaytraceDirection::TracingFront:
-				
-				TraceDirectionDelegate = AgentProperties.RaytraceFrontDelegate;
-				RelativeForward = Forward;
-				RelativeRight = Right;
-				break;
-			case EAgentRaytraceDirection::TracingLeft:
-				TraceDirectionDelegate = AgentProperties.RaytraceLeftDelegate;
-				RelativeForward = -Right;
-				RelativeRight = -Forward;
-				break;
-			case EAgentRaytraceDirection::TracingRight:
-				TraceDirectionDelegate = AgentProperties.RaytraceRightDelegate;
-				RelativeForward = Right;
-				RelativeRight = Forward;
-				break;
-			default:
-				break;
+			const FVector CurrentStartPoint = StartingPoint +
+				((-RelativeRight * WidthIncrementSize) * j) +
+				((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
+			const FVector CurrentEndPoint = CurrentStartPoint + (RelativeForward * 50.0f);
+
+			WorldRef->AsyncLineTraceByObjectType(
+				EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECC_Pawn,
+				FCollisionQueryParams::DefaultQueryParam,
+				&TraceDirectionDelegate
+			);
 		}
-
-		const FVector ForwardOffset = RelativeForward * (AgentProperties.CapsuleRadius + 1.0f);
-		const FVector RightOffset = RelativeRight * StartOffsetWidth;
-		const FVector StartingPoint = (((AgentLocation +ForwardOffset) + RightOffset) + StartOffsetHeightVector);
-
-		for(uint8 i = 0; i < Rows; i++) // Vertical Traces
-		{
-			for(uint8 j = 0; j < Columns; j++) // Horizontal Traces
-			{
-				const FVector CurrentStartPoint = StartingPoint +
-					((-RelativeRight * WidthIncrementSize) * j) +
-					((FVector(0.0f, 0.0f, -1.0f) * HeightIncrementSize) * i);
-				const FVector CurrentEndPoint = CurrentStartPoint + (RelativeForward * 50.0f);
-
-				WorldRef->AsyncLineTraceByObjectType(
-					EAsyncTraceType::Single, CurrentStartPoint, CurrentEndPoint, ECollisionChannel::ECC_Pawn,
-					FCollisionQueryParams::DefaultQueryParam,
-					&TraceDirectionDelegate
-				);
-			}
-		}
-	};
-
-	// Use the above lambda function to do each trace direction
-	DoTraceTask(EAgentRaytraceDirection::TracingFront);
-	DoTraceTask(EAgentRaytraceDirection::TracingLeft);
-	DoTraceTask(EAgentRaytraceDirection::TracingRight);
+	}
 }
 
 FVector ANAIAgentManager::GetAgentGoalLocationFromType(const EAgentType& AgentType, const FVector& PlayerLocation) const

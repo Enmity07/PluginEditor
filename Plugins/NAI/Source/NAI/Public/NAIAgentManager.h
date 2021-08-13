@@ -17,7 +17,7 @@
  * Simple enum used to categorize each set of Raytraces done
  * during each Agent's avoidance calculations.
  */
-enum class NAI_API EAgentRaytraceDirection : uint8
+enum class NAI_API EAgentAvoidanceTraceDirection : uint8
 {
 	TracingFront,
 	TracingLeft,
@@ -62,20 +62,17 @@ struct NAI_API FAgentTimedProperty
 	 */
 	FORCEINLINE void AddTime(const float InTime)
 	{
-		if(bIsPaused)
+		if(bIsPaused || bIsReady)
 			return;
 		
-		if(!bIsReady)
+		if(Time >= TickRate)
 		{
-			if(Time >= TickRate)
-			{
-				bIsReady = true;
-				Time = 0.0f;
-			}
-			else
-			{
-				Time += InTime;
-			}
+			bIsReady = true;
+			Time = 0.0f;
+		}
+		else
+		{
+			Time += InTime;
 		}
 	}
 
@@ -89,48 +86,83 @@ struct NAI_API FAgentTimedProperty
 template<typename TResultType>
 struct NAI_API TAgentResultContainer
 {
+	float Lifespan;
+	uint8 bIsDirty : 1;
+	
 	TResultType Result;
 	FAgentTimedProperty Age;
+
+	TAgentResultContainer()
+		: Lifespan(0.0f), bIsDirty(false)
+	{ }
 };
 
 template<typename TResultType>
 struct NAI_API TAgentTaskProperties
 {
-	FORCEINLINE void SetupTaskTimer(const float InTickRate)
+	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
 	{
 		TaskTimer.TickRate = InTickRate;
+		ResultContainer.Lifespan = InLifespan;
 	}
+	
 	FORCEINLINE void IncrementTimers(const float DeltaTime)
 	{
 		TaskTimer.AddTime(DeltaTime); ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
-	FORCEINLINE void Reset() { TaskTimer.Reset(); }	
-	FORCEINLINE uint8 IsReady() { return TaskTimer.bIsReady; }
 	
-	FORCEINLINE TResultType& GetResult() { return ResultContainer.Result; }
+	FORCEINLINE void Reset() { TaskTimer.Reset(); }
+	
+	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
+	
+	FORCEINLINE TResultType& GetResult() const { return ResultContainer.Result; }
+	
 	FORCEINLINE void SetResult(const TResultType& InResult)
 	{
 		ResultContainer.Result = InResult;
 		ResultContainer.Age.Reset();
 	}
+	
 private:
 	FAgentTimedProperty TaskTimer;
 	TAgentResultContainer<TResultType> ResultContainer;
 };
 
-struct NAI_API FAgentAvoidanceResultTimers
+struct NAI_API FAgentPathResult
 {
-	FAgentTimedProperty Forward;
-	FAgentTimedProperty Right;
-	FAgentTimedProperty Left;
+	uint8 bIsValidPath : 1;
+	TArray<FNavPathPoint> Points;
+
+	FAgentPathResult()
+		: bIsValidPath(false)
+	{ }
+
+	FAgentPathResult(const uint8 InIsValidPath, const TArray<FNavPathPoint>& InPathPoints)
+		: bIsValidPath(0), Points(InPathPoints)
+	{ }
+};
+
+struct NAI_API FAgentTraceResult
+{
+	/** Result may be invalid if the trace didnt hit anything */
+	uint8 bIsValidResult : 1;
+	/** Vector that represents  the hit location if we hit one */
+	FVector DetectedHitLocation;
+
+	FAgentTraceResult()
+		: bIsValidResult(false), DetectedHitLocation(FVector())
+	{ }
+	
+	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
+		: bIsValidResult(InIsValid), DetectedHitLocation(InLocation)
+	{ }
+	
+	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
 };
 
 struct NAI_API FAgentTimers
 {
 	FAgentTimedProperty MoveTime;
-	FAgentTimedProperty TraceTime;
-	
-	FAgentAvoidanceResultTimers AvoidanceResultAgeTimers;
 };
 
 // TODO: Get rid of this mess by making everything proportional
@@ -197,10 +229,10 @@ struct NAI_API FAgentAvoidanceProperties
 		SideWidthIncrementSize = (GridWidth * 0.5f) / SideColumns; // use half grid width for the sides
 		HeightIncrementSize = GridHeight / GridRows;
 
-		StartOffsetWidth = WidthIncrementSize * ((GridColumns - 1.0f) * 0.5f);
-		SideStartOffsetWidth = WidthIncrementSize * ((SideColumns - 1.0f) * 0.5f);
-		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1.0f) * 0.5f));
-		SideStartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((SideRows - 1.0f) * 0.5f));
+		StartOffsetWidth = WidthIncrementSize * ((GridColumns - 1) * 0.5f);
+		SideStartOffsetWidth = WidthIncrementSize * ((SideColumns - 1) * 0.5f);
+		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1) * 0.5f));
+		SideStartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((SideRows - 1) * 0.5f));
 	}
 };
 
@@ -226,37 +258,6 @@ struct NAI_API FAgentStepCheckProperties
 		ForwardOffset = (InRadius + 1.0f);
 		DownwardOffset = InHalfHeight - (InMaxStepHeight * 2.0f);
 	}
-};
-
-struct NAI_API FAgentTraceResult
-{
-	/** Result may be invalid if the trace didnt hit anything */
-	uint8 bIsValidResult : 1;
-	/** Vector that represents  the hit location if we hit one */
-	FVector DetectedHitLocation;
-
-	FAgentTraceResult() { bIsValidResult = false, DetectedHitLocation = FVector(); }
-	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
-	{
-		bIsValidResult = InIsValid;
-		DetectedHitLocation = InLocation;
-	}
-};
-
-struct NAI_API FAgentAvoidanceTaskResults
-{
-	uint8 bForwardBlocked : 1;
-	uint8 bRightBlocked : 1;
-	uint8 bLeftBlocked : 1;
-};
-
-struct NAI_API FAgentAvoidanceTaskResult
-{
-	EAgentRaytraceDirection Direction;
-	
-	uint8 bForwardBlocked : 1;
-	uint8 bRightBlocked : 1;
-	uint8 bLeftBlocked : 1;
 };
 
 struct NAI_API FAgentNavigationProperties
@@ -340,19 +341,12 @@ struct NAI_API FAgent
 	 * a delegate on the AgentClient which will in turn update this
 	 * with a new path for the Agent.
 	 */
-	TAgentTaskProperties<TArray<FNavPathPoint>> PathTask;
-
+	TAgentTaskProperties<FAgentPathResult> PathTask;
+	TAgentTaskProperties<FAgentTraceResult> AvoidanceFrontTask;
+	TAgentTaskProperties<FAgentTraceResult> AvoidanceRightTask;
+	TAgentTaskProperties<FAgentTraceResult> AvoidanceLeftTask;
 	TAgentTaskProperties<FAgentTraceResult> FloorCheckTask;
 	TAgentTaskProperties<FAgentTraceResult> StepCheckTask;
-
-	/**
-	 * The latest results for Each Avoidance Trace direction
-	 * Timers for the age of each directions trace results are stored
-	 * in the Timers variable under the AvoidanceResults variable.
-	 * We don't want to use the data from a given direction if it's old..
-	 * ...this should only be relevant when the frame rate is very low
-	 */
-	FAgentAvoidanceTaskResults LatestAvoidanceTaskResults;
 	
 	// Object that contains the timers
 	FAgentTimers Timers;
@@ -378,9 +372,9 @@ public:
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
 	/** Update the Agents PathPoints for their current navigation path. */
-	FORCEINLINE void UpdatePathTaskResults(const TArray<FNavPathPoint>& Points)
+	FORCEINLINE void UpdatePathTaskResults(const FAgentPathResult& InResult)
 	{
-		PathTask.SetResult(Points);
+		PathTask.SetResult(InResult);
 	}
 
 	/**
@@ -389,22 +383,22 @@ public:
 	 * @param bInResult Whether or not the trace hit an Agent.
 	 */
 	FORCEINLINE void UpdateAvoidanceResult(
-		const EAgentRaytraceDirection& InDirection,
+		const EAgentAvoidanceTraceDirection& InDirection,
 		const bool bInResult)
 	{
+		const FAgentTraceResult NewResult = FAgentTraceResult(
+			bInResult, FVector());
+	
 		switch(InDirection)
 		{
-			case EAgentRaytraceDirection::TracingFront:
-				LatestAvoidanceTaskResults.bForwardBlocked = bInResult;
-				Timers.AvoidanceResultAgeTimers.Forward.Reset();
+			case EAgentAvoidanceTraceDirection::TracingFront:
+				AvoidanceFrontTask.SetResult(NewResult);
 				break;
-			case EAgentRaytraceDirection::TracingLeft:
-				LatestAvoidanceTaskResults.bLeftBlocked = bInResult;
-				Timers.AvoidanceResultAgeTimers.Left.Reset();
+			case EAgentAvoidanceTraceDirection::TracingRight:
+				AvoidanceRightTask.SetResult(NewResult);
 				break;
-			case EAgentRaytraceDirection::TracingRight:
-				LatestAvoidanceTaskResults.bRightBlocked = bInResult;
-				Timers.AvoidanceResultAgeTimers.Right.Reset();
+			case EAgentAvoidanceTraceDirection::TracingLeft:
+				AvoidanceLeftTask.SetResult(NewResult);
 				break;
 			default:
 				break;
@@ -454,15 +448,13 @@ public:
 	FORCEINLINE void UpdateTimers(const float DeltaTime)
 	{
 		PathTask.IncrementTimers(DeltaTime);
-
+		AvoidanceFrontTask.IncrementTimers(DeltaTime);
+		AvoidanceRightTask.IncrementTimers(DeltaTime);
+		AvoidanceLeftTask.IncrementTimers(DeltaTime);
 		FloorCheckTask.IncrementTimers(DeltaTime);
-		
 		StepCheckTask.IncrementTimers(DeltaTime);
 		
 		Timers.MoveTime.AddTime(DeltaTime);
-		Timers.AvoidanceResultAgeTimers.Forward.AddTimeRaw(DeltaTime);
-		Timers.AvoidanceResultAgeTimers.Right.AddTimeRaw(DeltaTime);
-		Timers.AvoidanceResultAgeTimers.Left.AddTimeRaw(DeltaTime);
 	}
 
 	/**
@@ -538,14 +530,14 @@ public:
 	void UpdateAgent(const FAgent& Agent);
 	
 	/**
-	* Update the Agents current path with new PathPoints.
+	* Update the Agents current path with a new one.
 	* @param Guid The Guid of the Agent to update.
-	* @param PathPoints The direction of this trace result.
+	* @param InResult The new AgentPath result.
 	*/
 	FORCEINLINE void UpdateAgentPath(
-		const FGuid& Guid, const TArray<FNavPathPoint>& PathPoints)
+		const FGuid& Guid, const FAgentPathResult& InResult)
 	{
-		AgentMap[Guid].UpdatePathTaskResults(PathPoints);
+		AgentMap[Guid].UpdatePathTaskResults(InResult);
 	}
 	
 	/**
@@ -557,7 +549,7 @@ public:
 	*/
 	FORCEINLINE void UpdateAgentAvoidanceResult(
 		const FGuid& Guid,
-		const EAgentRaytraceDirection& TraceDirection, const bool bResult)
+		const EAgentAvoidanceTraceDirection& TraceDirection, const bool bResult)
 	{
 		AgentMap[Guid].UpdateAvoidanceResult(TraceDirection, bResult);
 	}
@@ -595,12 +587,14 @@ private:
 	
 	/**
 	 * // TODO: Document this
+	 * @param TraceDirection
 	 * @param AgentLocation 
 	 * @param Forward 
 	 * @param Right 
 	 * @param AgentProperties 
 	 */
-	void AgentAvoidanceTraceTaskAsync( 
+	void AgentAvoidanceTraceTaskAsync(
+		const EAgentAvoidanceTraceDirection& TraceDirection,
 		const FVector& AgentLocation,
 		const FVector& Forward,
 		const FVector& Right,
@@ -619,9 +613,10 @@ private:
 		const FVector& PlayerLocation) const;
 	
 	/**
-	 * // TODO: Document this 
+	 * TODO: Document this 
 	 */
 	void Initialize();
+	
 private:
 	/** Used to hold a reference to the current World. */
 	UPROPERTY()
