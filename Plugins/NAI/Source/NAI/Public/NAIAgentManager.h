@@ -32,7 +32,6 @@ enum class NAI_API EAgentAvoidanceTraceDirection : uint8
  */
 struct NAI_API FAgentTimedProperty
 {
-
 	/** The tick/time interval this timer should become "ready" at. */
 	float TickRate;
 	/** Used to track time passed. */
@@ -83,6 +82,25 @@ struct NAI_API FAgentTimedProperty
 	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
 };
 
+struct NAI_API FAgentSimpleTask
+{
+	virtual FORCEINLINE void InitializeTask(const float InTickRate)
+	{
+		TaskTimer.TickRate = InTickRate;
+	}
+	
+	virtual FORCEINLINE void IncrementTimers(const float DeltaTime)
+	{
+		TaskTimer.AddTime(DeltaTime);
+	}
+	
+	FORCEINLINE void Reset() { TaskTimer.Reset(); }
+	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
+	
+private:
+	FAgentTimedProperty TaskTimer;
+};
+
 template<typename TResultType>
 struct NAI_API TAgentResultContainer
 {
@@ -98,22 +116,19 @@ struct NAI_API TAgentResultContainer
 };
 
 template<typename TResultType>
-struct NAI_API TAgentTaskProperties
+struct NAI_API TAgentTask : FAgentSimpleTask
 {
-	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
+	virtual FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
 	{
-		TaskTimer.TickRate = InTickRate;
+		FAgentSimpleTask::InitializeTask(InTickRate);
 		ResultContainer.Lifespan = InLifespan;
 	}
 	
-	FORCEINLINE void IncrementTimers(const float DeltaTime)
+	virtual FORCEINLINE void IncrementTimers(const float DeltaTime)
 	{
-		TaskTimer.AddTime(DeltaTime); ResultContainer.Age.AddTimeRaw(DeltaTime);
+		FAgentSimpleTask::IncrementTimers(DeltaTime);
+		ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
-	
-	FORCEINLINE void Reset() { TaskTimer.Reset(); }
-	
-	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
 	
 	FORCEINLINE TResultType& GetResult() const { return ResultContainer.Result; }
 	
@@ -122,9 +137,8 @@ struct NAI_API TAgentTaskProperties
 		ResultContainer.Result = InResult;
 		ResultContainer.Age.Reset();
 	}
-	
+
 private:
-	FAgentTimedProperty TaskTimer;
 	TAgentResultContainer<TResultType> ResultContainer;
 };
 
@@ -158,11 +172,6 @@ struct NAI_API FAgentTraceResult
 	{ }
 	
 	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
-};
-
-struct NAI_API FAgentTimers
-{
-	FAgentTimedProperty MoveTime;
 };
 
 // TODO: Get rid of this mess by making everything proportional
@@ -341,15 +350,14 @@ struct NAI_API FAgent
 	 * a delegate on the AgentClient which will in turn update this
 	 * with a new path for the Agent.
 	 */
-	TAgentTaskProperties<FAgentPathResult> PathTask;
-	TAgentTaskProperties<FAgentTraceResult> AvoidanceFrontTask;
-	TAgentTaskProperties<FAgentTraceResult> AvoidanceRightTask;
-	TAgentTaskProperties<FAgentTraceResult> AvoidanceLeftTask;
-	TAgentTaskProperties<FAgentTraceResult> FloorCheckTask;
-	TAgentTaskProperties<FAgentTraceResult> StepCheckTask;
-	
-	// Object that contains the timers
-	FAgentTimers Timers;
+	TAgentTask<FAgentPathResult> PathTask;
+	TAgentTask<FAgentTraceResult> AvoidanceFrontTask;
+	TAgentTask<FAgentTraceResult> AvoidanceRightTask;
+	TAgentTask<FAgentTraceResult> AvoidanceLeftTask;
+	TAgentTask<FAgentTraceResult> FloorCheckTask;
+	TAgentTask<FAgentTraceResult> StepCheckTask;
+
+	FAgentSimpleTask MoveTask;
 
 	// Local copy of the agents current velocity Vector
 	float Speed;
@@ -418,7 +426,7 @@ public:
 			bSuccess,
 			(bSuccess) ? (HitLocation) : (FVector())
 		);
-
+		
 		FloorCheckTask.SetResult(NewResult);
 	}
 
@@ -453,8 +461,8 @@ public:
 		AvoidanceLeftTask.IncrementTimers(DeltaTime);
 		FloorCheckTask.IncrementTimers(DeltaTime);
 		StepCheckTask.IncrementTimers(DeltaTime);
-		
-		Timers.MoveTime.AddTime(DeltaTime);
+
+		MoveTask.IncrementTimers(DeltaTime);
 	}
 
 	/**
@@ -534,7 +542,7 @@ public:
 	* @param Guid The Guid of the Agent to update.
 	* @param InResult The new AgentPath result.
 	*/
-	FORCEINLINE void UpdateAgentPath(
+	FORCEINLINE void UpdateAgentPathResult(
 		const FGuid& Guid, const FAgentPathResult& InResult)
 	{
 		AgentMap[Guid].UpdatePathTaskResults(InResult);

@@ -75,8 +75,6 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentProperties.MoveSpeed = MoveSpeed;
 		Agent.AgentProperties.LookAtRotationRate = LookAtRotationRate;
 		Agent.AgentProperties.MaxStepHeight = MaxStepHeight;
-		
-		Agent.Timers.MoveTime.TickRate = MoveTickInterval;
 
 		Agent.PathTask.InitializeTask(PathfindingTickInterval, 0.5f);
 		Agent.AvoidanceFrontTask.InitializeTask(AvoidanceTickInterval, 0.5f);
@@ -84,6 +82,8 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AvoidanceLeftTask.InitializeTask(AvoidanceTickInterval, 0.5f);
 		Agent.FloorCheckTask.InitializeTask(0.01f, 0.5f);
 		Agent.StepCheckTask.InitializeTask(0.01f, 0.5f);
+		
+		Agent.MoveTask.InitializeTask(MoveTickInterval);
 		
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentRadius =
 			Agent.AgentProperties.CapsuleRadius;
@@ -214,11 +214,27 @@ void ANAIAgentClient::OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult:
 	{
 		return;
 	}
+
+	switch(ResultType)
+	{
+		case ENavigationQueryResult::Success:
+			const FAgentPathResult NewResult = FAgentPathResult(true, NavPointer.Get()->GetPathPoints());
+			AgentManager->UpdateAgentPathResult(Guid, NewResult);
+			break;
+		case ENavigationQueryResult::Invalid:
+			break;
+		case ENavigationQueryResult::Error:
+			break;
+		case ENavigationQueryResult::Fail:
+			break;
+		default:
+			break;
+	}
 	
 	if(ResultType == ENavigationQueryResult::Success)
 	{
 		const FAgentPathResult NewResult = FAgentPathResult(true, NavPointer.Get()->GetPathPoints());
-		AgentManager->UpdateAgentPath(Guid, NewResult);
+		AgentManager->UpdateAgentPathResult(Guid, NewResult);
 	}
 	else
 	{

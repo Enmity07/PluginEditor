@@ -172,7 +172,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				}
 				
 				/** Execute the movement task TODO: Doc this properly */
-				if(Agent.Timers.MoveTime.bIsReady)
+				if(Agent.MoveTask.IsReady())
 				{
 					const TArray<FNavPathPoint> PathPoints = Agent.PathTask.GetResult().Points;
 					
@@ -225,7 +225,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						Agent.AgentClient->GetRootComponent()->MoveComponent(MoveDelta, LerpRotation, true);
 					}
 					
-					Agent.Timers.MoveTime.Reset();
+					Agent.MoveTask.Reset();
 				}
 				
 				/** Update the agent in the map to apply the changes we've made this tick */ // TODO: Don't need to copy the whole thing, just the task changes
