@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 #include "NAIAgentManager.h"
 
@@ -7,7 +7,7 @@
 #include "Async/Async.h"
 #include "Kismet/KismetMathLibrary.h"
 
-#define NULL_VECTOR FVector(125.0f, 420.0f, 317.4f)
+#define NULL_VECTOR FVector(125.0f, 420.0f, -31700.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
 
 ANAIAgentManager::ANAIAgentManager()
@@ -130,7 +130,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 
 				/**
 				 * The Object types to query for AsyncLineTraceByObjectType calls.
-				 * This convert each ECC_XXXX channel to a bitfield, add more channels with the |
+				 * This converts each added ECC_XXXX channel to a bitfield, add more channels with the |
 				 * operator. Read the comments on the FCollisionObjectQueryParams type for more info.
 				 */
 				const FCollisionObjectQueryParams ObjectQueryParams =
@@ -160,7 +160,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						AgentLocation +
 							(AgentForward * Agent.AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
 							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
-					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
+				const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
 					
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
@@ -241,25 +241,75 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 
 #undef ENABLE_DEBUG_DRAW_LINE
 
-void ANAIAgentManager::AddAgent(const FAgent& Agent)
-{	
-	AgentMap.Add(Agent.Guid, Agent);
-	AgentGuids.AddUnique(Agent.Guid);
-}
+#define ENABLE_DEBUG_DRAW_LINE				true
+#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
+#define ENABLE_DEBUG_PRINT_SCREEN			false
 
-void ANAIAgentManager::RemoveAgent(const FGuid& Guid)
-{		
-	AgentMap.Remove(Guid);
-	AgentGuids.Remove(Guid);
-}
-
-void ANAIAgentManager::UpdateAgent(const FAgent& Agent)
+void ANAIAgentManager::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid)
 {
-	// The Add() function for the TMap replaces copies
-	// So if the Agent guid already exists in the map it will
-	// get overwritten with this new one
-	AgentMap.Add(Agent.Guid, Agent);
+	UE_LOG(LogTemp, Warning, TEXT("Guid: %s"), *Guid.ToString());
+
+	if(!Handle.IsValid())
+		return;
+
+#if (ENABLE_DEBUG_DRAW_LINE)
+	if(WorldRef)
+	{
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
+	}
+#endif
+	if(Data.OutHits.Num() == 0)
+	{
+		UpdateAgentFloorCheckResult(Guid, FVector::ZeroVector, false);
+		return;
+	}
+	
+	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
+#if (ENABLE_FLOOR_DEBUG_PRINT_SCREEN)
+	if(GEngine)
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Total number non agents locs: %d"),
+			Locations.Num()));
+#endif
+	if(Locations.Num() == 0)
+	{
+		UpdateAgentFloorCheckResult(Guid, FVector::ZeroVector, false);
+		return;
+	}
+	FVector HighestVector = FVector::ZeroVector;
+	for(int i = 0; i < Locations.Num(); i++)
+	{
+		if(Locations[i].Z > HighestVector.Z)
+		{
+			HighestVector = Locations[i];
+		}
+	}
+	UpdateAgentFloorCheckResult(Guid, HighestVector, true);
 }
+
+TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults)
+{
+	TArray<FVector> Locations;
+	
+	for(int i = 0; i < HitResults.Num(); i++)
+	{
+		if(HitResults[i].Actor.IsValid())
+		{
+			if(!HitResults[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+			{
+				Locations.Add(HitResults[i].Location);
+			}
+		}
+	}
+	
+	return Locations; 
+}
+
+#undef ENABLE_DEBUG_DRAW_LINE
+#undef ENABLE_FLOOR_DEBUG_PRINT_SCREEN
+#undef ENABLE_DEBUG_PRINT_SCREEN
 
 void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& Goal,
                                           const FAgentNavigationProperties& NavigationProperties) const

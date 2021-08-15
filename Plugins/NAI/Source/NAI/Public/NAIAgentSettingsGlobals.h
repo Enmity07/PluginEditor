@@ -1,4 +1,6 @@
-﻿#pragma once
+﻿// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
+
+#pragma once
 
 UENUM(BlueprintType, Blueprintable)
 enum  class EAgentType : uint8

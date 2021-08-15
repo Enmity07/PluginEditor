@@ -1,4 +1,4 @@
-// Some copyright should be here...
+// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 using UnrealBuildTool;
 

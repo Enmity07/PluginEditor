@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 #include "NAIAgentClient.h"
 
@@ -58,6 +58,7 @@ void ANAIAgentClient::BeginPlay()
 	{
 		// Create the Agent guid at Runtime, not in the constructor
 		Guid = FGuid::NewGuid();
+		UE_LOG(LogTemp, Warning, TEXT("REAL: Guid: %s"), *Guid.ToString());
 		
 		// Init the agent we're going to add here
 		FAgent Agent;
@@ -106,10 +107,14 @@ void ANAIAgentClient::BeginPlay()
 		);
 
 		Agent.bIsHalted = false;
+		
+		Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate.BindUObject(
+			AgentManager, &ANAIAgentManager::OnFloorCheckTraceComplete, Guid
+		);
 
 		// Bind the OnAsyncPathComplete function to the Async Navigation Query
 		Agent.AgentProperties.NavigationProperties.NavPathQueryDelegate.BindUObject(this, &ANAIAgentClient::OnAsyncPathComplete);
-		Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate.BindUObject(this, &ANAIAgentClient::OnFloorCheckTraceComplete);
+		// Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate.BindUObject(this, &ANAIAgentClient::OnFloorCheckTraceComplete);
 		Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate.BindUObject(this, &ANAIAgentClient::OnStepCheckTraceComplete);
 		Agent.AgentProperties.RaytraceFrontDelegate.BindUObject(this, &ANAIAgentClient::OnFrontTraceCompleted);
 		Agent.AgentProperties.RaytraceRightDelegate.BindUObject(this, &ANAIAgentClient::OnRightTraceCompleted);
@@ -122,49 +127,6 @@ void ANAIAgentClient::BeginPlay()
 #define ENABLE_DEBUG_DRAW_LINE true
 #define ENABLE_FLOOR_DEBUG_PRINT_SCREEN false
 #define ENABLE_DEBUG_PRINT_SCREEN false
-
-void ANAIAgentClient::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
-{
-	if(!Handle.IsValid() || !AgentManager)
-		return;
-
-#if (ENABLE_DEBUG_DRAW_LINE)
-	if(WorldRef)
-	{
-		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
-			false, 2, 0, 2.0f);
-	}
-#endif
-	if(Data.OutHits.Num() == 0)
-	{
-		AgentManager->UpdateAgentFloorCheckResult(Guid, FVector(), false);
-		return;
-	}
-	
-	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
-#if (ENABLE_FLOOR_DEBUG_PRINT_SCREEN)
-	if(GEngine)
-		GEngine->AddOnScreenDebugMessage(
-			-1, 1.0f, FColor::Yellow,
-			FString::Printf(TEXT("Total number non agents locs: %d"),
-			Locations.Num()));
-#endif
-	if(Locations.Num() == 0)
-	{
-		AgentManager->UpdateAgentFloorCheckResult(Guid, FVector(), false);
-		return;
-	}
-	
-	FVector HighestVector = FVector();
-	for(int i = 0; i < Locations.Num(); i++)
-	{
-		if(Locations[i].Z > HighestVector.Z)
-		{
-			HighestVector = Locations[i];
-		}
-	}
-	AgentManager->UpdateAgentFloorCheckResult(Guid, HighestVector, true);
-}
 
 void ANAIAgentClient::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
 {
@@ -213,22 +175,6 @@ void ANAIAgentClient::OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult:
 	if(!AgentManager)
 	{
 		return;
-	}
-
-	switch(ResultType)
-	{
-		case ENavigationQueryResult::Success:
-			const FAgentPathResult NewResult = FAgentPathResult(true, NavPointer.Get()->GetPathPoints());
-			AgentManager->UpdateAgentPathResult(Guid, NewResult);
-			break;
-		case ENavigationQueryResult::Invalid:
-			break;
-		case ENavigationQueryResult::Error:
-			break;
-		case ENavigationQueryResult::Fail:
-			break;
-		default:
-			break;
 	}
 	
 	if(ResultType == ENavigationQueryResult::Success)

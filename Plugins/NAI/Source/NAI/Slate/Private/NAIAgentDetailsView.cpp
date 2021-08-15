@@ -1,4 +1,4 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 #include "NAI/Slate/Public/NAIAgentDetailsView.h"
 #include "NAI.h"

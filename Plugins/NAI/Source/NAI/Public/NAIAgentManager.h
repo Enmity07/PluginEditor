@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 #pragma once
 
@@ -84,21 +84,21 @@ struct NAI_API FAgentTimedProperty
 
 struct NAI_API FAgentSimpleTask
 {
-	virtual FORCEINLINE void InitializeTask(const float InTickRate)
+private:
+	FAgentTimedProperty TaskTimer;
+public:
+	FORCEINLINE void InitializeTask(const float InTickRate)
 	{
 		TaskTimer.TickRate = InTickRate;
 	}
 	
-	virtual FORCEINLINE void IncrementTimers(const float DeltaTime)
+	FORCEINLINE void IncrementTimers(const float DeltaTime)
 	{
 		TaskTimer.AddTime(DeltaTime);
 	}
 	
 	FORCEINLINE void Reset() { TaskTimer.Reset(); }
 	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
-	
-private:
-	FAgentTimedProperty TaskTimer;
 };
 
 template<typename TResultType>
@@ -115,22 +115,27 @@ struct NAI_API TAgentResultContainer
 	{ }
 };
 
-template<typename TResultType>
+template<typename TResultType, typename TOnCompleteDelegate>
 struct NAI_API TAgentTask : FAgentSimpleTask
 {
-	virtual FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
+private:
+	TAgentResultContainer<TResultType> ResultContainer;
+	TOnCompleteDelegate OnCompleteDelegate;
+	
+public:
+	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
 	{
 		FAgentSimpleTask::InitializeTask(InTickRate);
 		ResultContainer.Lifespan = InLifespan;
 	}
 	
-	virtual FORCEINLINE void IncrementTimers(const float DeltaTime)
+	FORCEINLINE void IncrementTimers(const float DeltaTime)
 	{
 		FAgentSimpleTask::IncrementTimers(DeltaTime);
 		ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
 	
-	FORCEINLINE TResultType& GetResult() const { return ResultContainer.Result; }
+	FORCEINLINE TResultType GetResult() const { return ResultContainer.Result; }
 	
 	FORCEINLINE void SetResult(const TResultType& InResult)
 	{
@@ -138,8 +143,7 @@ struct NAI_API TAgentTask : FAgentSimpleTask
 		ResultContainer.Age.Reset();
 	}
 
-private:
-	TAgentResultContainer<TResultType> ResultContainer;
+	FORCEINLINE TOnCompleteDelegate GetOnCompleteDelegate() const { return OnCompleteDelegate; }
 };
 
 struct NAI_API FAgentPathResult
@@ -172,6 +176,7 @@ struct NAI_API FAgentTraceResult
 	{ }
 	
 	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
+	FORCEINLINE float GetHitZValue() const { return DetectedHitLocation.Z; }
 };
 
 // TODO: Get rid of this mess by making everything proportional
@@ -183,8 +188,6 @@ struct NAI_API FAgentTraceResult
 #define ADVANCED_AVOIDANCE_ROWS			5
 #define AVOIDANCE_WIDTH_MULTIPLIER		1.5f
 #define AVOIDANCE_HEIGHT_MULTIPLIER		0.8f
-
-#define UP_VECTOR FVector(0.0f, 0.0f, 1.0f)
 
 struct NAI_API FAgentAvoidanceProperties
 {
@@ -240,12 +243,10 @@ struct NAI_API FAgentAvoidanceProperties
 
 		StartOffsetWidth = WidthIncrementSize * ((GridColumns - 1) * 0.5f);
 		SideStartOffsetWidth = WidthIncrementSize * ((SideColumns - 1) * 0.5f);
-		StartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((GridRows - 1) * 0.5f));
-		SideStartOffsetHeightVector = UP_VECTOR * (HeightIncrementSize * ((SideRows - 1) * 0.5f));
+		StartOffsetHeightVector = FVector::UpVector * (HeightIncrementSize * ((GridRows - 1) * 0.5f));
+		SideStartOffsetHeightVector = FVector::UpVector * (HeightIncrementSize * ((SideRows - 1) * 0.5f));
 	}
 };
-
-#undef UP_VECTOR
 
 #undef NORMAL_AVOIDANCE_COLUMNS
 #undef ADVANCED_AVOIDANCE_COLUMNS
@@ -272,6 +273,7 @@ struct NAI_API FAgentStepCheckProperties
 struct NAI_API FAgentNavigationProperties
 {
 	FNavAgentProperties NavAgentProperties;
+	
 	/** Local copy of the delegate which is called after an Async path task completes */
 	FNavPathQueryDelegate NavPathQueryDelegate;
 
@@ -350,12 +352,12 @@ struct NAI_API FAgent
 	 * a delegate on the AgentClient which will in turn update this
 	 * with a new path for the Agent.
 	 */
-	TAgentTask<FAgentPathResult> PathTask;
-	TAgentTask<FAgentTraceResult> AvoidanceFrontTask;
-	TAgentTask<FAgentTraceResult> AvoidanceRightTask;
-	TAgentTask<FAgentTraceResult> AvoidanceLeftTask;
-	TAgentTask<FAgentTraceResult> FloorCheckTask;
-	TAgentTask<FAgentTraceResult> StepCheckTask;
+	TAgentTask<FAgentPathResult, FNavPathQueryDelegate> PathTask;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceFrontTask;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceRightTask;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceLeftTask;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
 
 	FAgentSimpleTask MoveTask;
 
@@ -395,7 +397,7 @@ public:
 		const bool bInResult)
 	{
 		const FAgentTraceResult NewResult = FAgentTraceResult(
-			bInResult, FVector());
+			bInResult, FVector::ZeroVector);
 	
 		switch(InDirection)
 		{
@@ -424,7 +426,7 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bSuccess,
-			(bSuccess) ? (HitLocation) : (FVector())
+			(bSuccess) ? (HitLocation) : (FVector::ZeroVector)
 		);
 		
 		FloorCheckTask.SetResult(NewResult);
@@ -441,7 +443,7 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bStepDetected,
-			(bStepDetected) ? (HitLocation) : (FVector())
+			(bStepDetected) ? (HitLocation) : (FVector::ZeroVector)
 		);
 		
 		StepCheckTask.SetResult(NewResult);
@@ -521,13 +523,21 @@ public:
 	 * contain a copy of it.
 	 * @param Agent The new Agent to add to the map.
 	 */
-	void AddAgent(const FAgent& Agent);
+	FORCEINLINE void AddAgent(const FAgent& Agent)
+	{
+		AgentMap.Add(Agent.Guid, Agent);
+		AgentGuids.AddUnique(Agent.Guid);
+	}
 	
 	/**
 	 * Remove an Agent from the map.
 	 * @param Guid The Guid of the Agent to remove.
 	 */
-	void RemoveAgent(const FGuid& Guid);
+	FORCEINLINE void RemoveAgent(const FGuid& Guid)
+	{
+		AgentMap.Remove(Guid);
+		AgentGuids.Remove(Guid);
+	}
 	
 	/**
 	 * Overwrite the Agent in the map with a new one.
@@ -535,7 +545,13 @@ public:
 	 * contain a copy of it.
 	 * @param Agent The new Agent were going to replace the old one with.
 	 */
-	void UpdateAgent(const FAgent& Agent);
+	FORCEINLINE void UpdateAgent(const FAgent& Agent)
+	{
+		// The Add() function for the TMap replaces copies
+		// So if the Agent guid already exists in the map it will
+		// get overwritten with this new one
+		AgentMap.Add(Agent.Guid, Agent);
+	}
 	
 	/**
 	* Update the Agents current path with a new one.
@@ -579,6 +595,22 @@ public:
 	{
 		AgentMap[Guid].UpdateStepCheckResult(HitLocation, bStepDetected);
 	}
+	
+	/**
+	 * @brief 
+	 * @param Handle 
+	 * @param Data 
+	 * @param Guid 
+	 */
+	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid);
+
+private:
+	/**
+	 * @brief 
+	 * @param HitResults 
+	 * @return 
+	 */
+	TArray<FVector> GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults);
 	
 private:
 	/**

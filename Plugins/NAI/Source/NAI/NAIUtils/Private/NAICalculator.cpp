@@ -1,4 +1,5 @@
-﻿// Fill out your copyright notice in the Description page of Project Settings.
+﻿// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
+
 #pragma once
 
 #include "NAI/NAIUtils/Public/NAICalculator.h"

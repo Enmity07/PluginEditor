@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+// Copyright NoxxProjects and Primrose Taylor. All rights reserved.
 
 #pragma once
 
@@ -53,8 +53,7 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent")
 	EAgentAvoidanceLevel AvoidanceLevel;
-
-	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
+	
 	void OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
 
