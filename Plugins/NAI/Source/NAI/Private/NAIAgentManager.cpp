@@ -10,6 +10,29 @@
 #define NULL_VECTOR FVector(125.0f, 420.0f, -31700.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
 
+bool UAgentManagerStatics::bManagerExists = false;
+ANAIAgentManager* UAgentManagerStatics::CurrentManager = nullptr;
+
+void UAgentManagerStatics::SetManagerReference(ANAIAgentManager* InManager)
+{
+	if(!InManager)
+		return;
+		
+	CurrentManager = InManager;
+	bManagerExists = true;
+}
+
+ANAIAgentManager* UAgentManagerStatics::GetManagerReference()
+{
+	return CurrentManager;
+}
+
+void UAgentManagerStatics::Reset()
+{
+	CurrentManager = nullptr;
+	bManagerExists = false;
+}
+
 ANAIAgentManager::ANAIAgentManager()
 {
 	MaxAgentCount = MAX_AGENT_PRE_ALLOC;
@@ -25,7 +48,20 @@ void ANAIAgentManager::BeginPlay()
 {
 	Super::BeginPlay();
 
+	// TODO: Throw some error if there is more than 1 AgentManager in the level
+
+	/** Add this manager as the current active manager. */
+	UAgentManagerStatics::SetManagerReference(this);
+	
 	AgentMap.Reserve(MAX_AGENT_PRE_ALLOC);
+}
+
+void ANAIAgentManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
+
+	/** Remove the reference to this manager. */
+	UAgentManagerStatics::Reset();
 }
 
 #undef MAX_AGENT_PRE_ALLOC
@@ -165,14 +201,14 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						AgentLocation +
 							(AgentForward * Agent.AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
 							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
-				const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
+					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
 					
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
 						&Agent.StepCheckTask.GetOnCompleteDelegate()
 					);
-						
+					
 					Agent.StepCheckTask.Reset();
 				}
 				

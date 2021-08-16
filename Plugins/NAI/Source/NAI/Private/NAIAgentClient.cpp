@@ -8,6 +8,8 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 
+class UAgentManagerStatics;
+
 ANAIAgentClient::ANAIAgentClient()
 {
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Capsule"));
@@ -35,9 +37,6 @@ ANAIAgentClient::ANAIAgentClient()
 	PathfindingTickInterval = 0.5f;
 	AvoidanceTickInterval = 0.3f;
 	
-	AgentManager = nullptr;
-	WorldRef = nullptr;
-	
 	bFindCameraComponentWhenViewTarget = false;
 	bBlockInput = true;
 	
@@ -48,17 +47,14 @@ void ANAIAgentClient::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if(AgentManagerVariable)
-		AgentManager = AgentManagerVariable;
-
-	if(WorldRef == nullptr)
-		WorldRef = GetWorld();
+	ANAIAgentManager* AgentManager = (UAgentManagerStatics::bManagerExists)
+		? (UAgentManagerStatics::GetManagerReference()) : (nullptr);
 	
 	if(AgentManager)
 	{
 		// Create the Agent guid at Runtime, not in the constructor
 		Guid = FGuid::NewGuid();
-		UE_LOG(LogTemp, Warning, TEXT("REAL: Guid: %s"), *Guid.ToString());
+		UE_LOG(LogTemp, Warning, TEXT("Hey my Guid: %s"), *Guid.ToString());
 		
 		// Init the agent we're going to add here
 		FAgent Agent;

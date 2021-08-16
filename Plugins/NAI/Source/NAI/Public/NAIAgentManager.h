@@ -502,6 +502,8 @@ protected:
 	/** Called when the game starts or when spawned */
 	virtual void BeginPlay() override;
 
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+
 public:	
 	/** Called every frame */
 	virtual void Tick(float DeltaTime) override;
@@ -727,4 +729,17 @@ private:
 	 */
 	UPROPERTY()
 	TArray<FGuid> AgentGuids;
+};
+
+/** TODO: Sort this out */
+class UAgentManagerStatics
+{
+public:
+	static bool bManagerExists;
+	
+	static void SetManagerReference(ANAIAgentManager* InManager);
+	static ANAIAgentManager* GetManagerReference();
+	static void Reset();
+private:
+	static ANAIAgentManager* CurrentManager;
 };

@@ -28,9 +28,6 @@ public:
 	UPROPERTY(EditAnywhere)
 	float DownwardOffsetForce;
 	
-	UPROPERTY(EditAnywhere)
-	class ANAIAgentManager *AgentManagerVariable;
-	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent", meta =
 		(ClampMin = 0, ClampMax = 1000, UIMin = 0, UIMax = 1000))
 	float MoveSpeed;
@@ -75,10 +72,4 @@ private:
 private:
 	UPROPERTY()
 	FGuid Guid;
-	
-	UPROPERTY()
-	class ANAIAgentManager *AgentManager;
-	
-	UPROPERTY()
-	class UWorld *WorldRef;
 };
