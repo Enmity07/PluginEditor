@@ -135,7 +135,7 @@ public:
 		ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
 	
-	FORCEINLINE TResultType GetResult() const { return ResultContainer.Result; }
+	FORCEINLINE TResultType& GetResult() { return ResultContainer.Result; }
 	
 	FORCEINLINE void SetResult(const TResultType& InResult)
 	{
@@ -143,7 +143,7 @@ public:
 		ResultContainer.Age.Reset();
 	}
 
-	FORCEINLINE TOnCompleteDelegate GetOnCompleteDelegate() const { return OnCompleteDelegate; }
+	FORCEINLINE TOnCompleteDelegate& GetOnCompleteDelegate() { return OnCompleteDelegate; }
 };
 
 struct NAI_API FAgentPathResult
@@ -273,15 +273,9 @@ struct NAI_API FAgentStepCheckProperties
 struct NAI_API FAgentNavigationProperties
 {
 	FNavAgentProperties NavAgentProperties;
-	
-	/** Local copy of the delegate which is called after an Async path task completes */
-	FNavPathQueryDelegate NavPathQueryDelegate;
 
 	/** Sub-structure containing the Agent's Step Navigation properties. */
 	FAgentStepCheckProperties StepProperties;
-	
-	FTraceDelegate FloorCheckTraceDelegate;
-	FTraceDelegate StepCheckTraceDelegate;
 };
 
 struct NAI_API FAgentProperties
@@ -300,10 +294,6 @@ struct NAI_API FAgentProperties
 	/** The maximum step height for this Agent. */
 	float MaxStepHeight;
 	
-	// Async Raytracing
-	FTraceDelegate RaytraceFrontDelegate;
-	FTraceDelegate RaytraceRightDelegate;
-	FTraceDelegate RaytraceLeftDelegate;
 	/** Sub-structure containing the Agent's Navigation properties. */
 	FAgentNavigationProperties NavigationProperties;
 	/** Sub-structure containing the Agent's Avoidance properties. */
@@ -590,11 +580,52 @@ public:
 		AgentMap[Guid].UpdateFloorCheckResult(HitLocation, bSuccess);
 	}
 
+	/**
+	 * @brief 
+	 * @param Guid 
+	 * @param HitLocation 
+	 * @param bStepDetected 
+	 */
 	FORCEINLINE void UpdateAgentStepCheckResult(
 		const FGuid& Guid, const FVector& HitLocation, const bool bStepDetected)
 	{
 		AgentMap[Guid].UpdateStepCheckResult(HitLocation, bStepDetected);
 	}
+
+	/**
+	 * @brief 
+	 * @param PathId 
+	 * @param ResultType 
+	 * @param NavPointer 
+	 * @param Guid 
+	 */
+	void OnAsyncPathComplete(
+		uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer,
+		FGuid Guid
+	);
+	
+	/**
+	 * @brief 
+	 * @param Handle 
+	 * @param Data
+	 * @param Guid 
+	 * @param Direction 
+	 */
+	void OnAvoidanceTraceComplete(
+		const FTraceHandle& Handle, FTraceDatum& Data,
+		FGuid Guid, EAgentAvoidanceTraceDirection Direction
+	);
+
+	/**
+	 * @brief 
+	 * @param Handle 
+	 * @param Data 
+	 * @param Guid 
+	 */
+	void OnFloorCheckTraceComplete(
+		const FTraceHandle& Handle, FTraceDatum& Data,
+		FGuid Guid
+	);
 	
 	/**
 	 * @brief 
@@ -602,27 +633,37 @@ public:
 	 * @param Data 
 	 * @param Guid 
 	 */
-	void OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid);
+	void OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid);
 
 private:
 	/**
 	 * @brief 
 	 * @param HitResults 
-	 * @return 
+	 * @return  
 	 */
 	TArray<FVector> GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults);
+
+	/**
+	 * @brief 
+	 * @param Objects 
+	 * @param Guid 
+	 * @return 
+	 */
+	bool CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid);
 	
 private:
 	/**
 	 * // TODO: Document this
 	 * @param Start 
 	 * @param Goal 
-	 * @param NavigationProperties 
+	 * @param NavAgentProperties
+	 * @param PathDelegate 
 	 */
 	void AgentPathTaskAsync(
 		const FVector& Start,
 		const FVector& Goal,
-		const FAgentNavigationProperties& NavigationProperties
+		const FNavAgentProperties& NavAgentProperties,
+		const FNavPathQueryDelegate& PathDelegate
 	) const;
 	
 	/**
@@ -631,14 +672,16 @@ private:
 	 * @param AgentLocation 
 	 * @param Forward 
 	 * @param Right 
-	 * @param AgentProperties 
+	 * @param AgentProperties
+	 * @param TraceDirectionDelegate 
 	 */
 	void AgentAvoidanceTraceTaskAsync(
 		const EAgentAvoidanceTraceDirection& TraceDirection,
 		const FVector& AgentLocation,
 		const FVector& Forward,
 		const FVector& Right,
-		const FAgentProperties& AgentProperties
+		const FAgentProperties& AgentProperties,
+		FTraceDelegate& TraceDirectionDelegate
 	) const;
 	
 	// TODO: Not sure why i didn't inline this..
