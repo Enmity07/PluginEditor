@@ -135,7 +135,7 @@ void ANAIAgentClient::BeginPlay()
 			AgentManager, &ANAIAgentManager::OnStepCheckTraceComplete, Guid
 		);
 
-		// Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
+		//  Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
 	}
 }

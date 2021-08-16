@@ -704,7 +704,7 @@ private:
 	/** Used to hold a reference to the current World. */
 	UPROPERTY()
 	class UWorld *WorldRef;
-	/** Used to hold a reference to the current Navigation System. */
+	/** Used to hold a reference to the current Navigation System.  */
 	UPROPERTY()
 	class UNavigationSystemV1 *NavSysRef;
 	/** Used to hold a reference to the current Navigation Data. */
