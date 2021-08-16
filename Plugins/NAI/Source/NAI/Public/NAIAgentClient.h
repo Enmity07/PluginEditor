@@ -54,9 +54,6 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Agent")
 	EAgentAvoidanceLevel AvoidanceLevel;
 	
-	void OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
-	void OnAsyncPathComplete(uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer);
-
 	void OnFrontTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnRightTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
 	void OnLeftTraceCompleted(const FTraceHandle& Handle, FTraceDatum& Data);
@@ -65,6 +62,12 @@ public:
 	float Speed;
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent")
 	FVector Velocity;
+
+public:
+	FORCEINLINE class UCapsuleComponent* GetCapsuleComponent() { return this->CapsuleComponent; }
+	FORCEINLINE class USkeletalMeshComponent* GetSkeletalMeshComponent() { return this->SkeletalMeshComponent; }
+    	
+	FORCEINLINE FGuid GetGuid() const { return Guid; }
 	
 private:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Agent", meta = (AllowPrivateAccess = "true"))

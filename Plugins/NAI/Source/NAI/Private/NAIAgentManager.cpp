@@ -84,7 +84,9 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					const EAgentType AgentType = Agent.AgentProperties.AgentType;
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
 					
-					AgentPathTaskAsync(AgentLocation, GoalLocation, Agent.AgentProperties.NavigationProperties); // start the task
+					AgentPathTaskAsync(AgentLocation, GoalLocation,
+						Agent.AgentProperties.NavigationProperties.NavAgentProperties,
+						Agent.PathTask.GetOnCompleteDelegate()); // start the task
 					Agent.PathTask.Reset(); // Reset the timer
 				}
 
@@ -147,7 +149,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
-						&Agent.AgentProperties.NavigationProperties.FloorCheckTraceDelegate
+						&Agent.FloorCheckTask.GetOnCompleteDelegate()
 					);
 					
 					Agent.FloorCheckTask.Reset();
@@ -165,7 +167,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
-						&Agent.AgentProperties.NavigationProperties.StepCheckTraceDelegate
+						&Agent.StepCheckTask.GetOnCompleteDelegate()
 					);
 						
 					Agent.StepCheckTask.Reset();
@@ -245,6 +247,45 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 #define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
 #define ENABLE_DEBUG_PRINT_SCREEN			false
 
+void ANAIAgentManager::OnAsyncPathComplete(
+	uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer,
+	FGuid Guid)
+{
+	if(ResultType == ENavigationQueryResult::Success)
+	{
+		const FAgentPathResult NewResult = FAgentPathResult(true, NavPointer.Get()->GetPathPoints());
+		UpdateAgentPathResult(Guid, NewResult);
+	}
+	else
+	{
+		// Handle Pathfinding failed
+	}
+}
+
+void ANAIAgentManager::OnAvoidanceTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data,
+	const EAgentAvoidanceTraceDirection& Direction, FGuid Guid)
+{
+	if(!Handle.IsValid())
+		return;
+	
+	if(Data.OutHits.Num() == 0)
+	{
+		UpdateAgentAvoidanceResult(Guid, Direction, false);
+	}
+	else
+	{
+		UpdateAgentAvoidanceResult(Guid, Direction,
+	CheckIfBlockedByAgent(Data.OutHits, Guid));
+	}
+#if (ENABLE_DEBUG_DRAW_LINE)
+	if(WorldRef)
+	{
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
+	}
+#endif
+}
+
 void ANAIAgentManager::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid)
 {
 	UE_LOG(LogTemp, Warning, TEXT("Guid: %s"), *Guid.ToString());
@@ -289,6 +330,68 @@ void ANAIAgentManager::OnFloorCheckTraceComplete(const FTraceHandle& Handle, FTr
 	UpdateAgentFloorCheckResult(Guid, HighestVector, true);
 }
 
+void ANAIAgentManager::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid)
+{
+	if(!Handle.IsValid())
+		return;
+
+#if (ENABLE_DEBUG_DRAW_LINE)
+	if(WorldRef)
+	{
+		DrawDebugLine(WorldRef, Data.Start, Data.End, FColor(0, 255, 0),
+			false, 2, 0, 2.0f);
+	}
+#endif
+	if(Data.OutHits.Num() == 0)
+	{
+		UpdateAgentStepCheckResult(Guid, FVector::ZeroVector, false);
+		return; 
+	}
+	const TArray<FVector> Locations = GetAllHitLocationsNotFromAgents(Data.OutHits);
+#if (ENABLE_DEBUG_PRINT_SCREEN)
+	if(GEngine)
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Total number non agents locs: %d"),
+			Locations.Num()));
+#endif
+	if(Locations.Num() == 0)
+	{
+		UpdateAgentStepCheckResult(Guid, FVector::ZeroVector, false);
+		return;
+	}
+
+	FVector HighestVector = FVector::ZeroVector;
+	for(int i = 0; i < Locations.Num(); i++)
+	{
+		if(Locations[i].Z > HighestVector.Z)
+		{
+			HighestVector = Locations[i];
+		}
+	}
+	UpdateAgentStepCheckResult(Guid, HighestVector, true);
+}
+
+bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid)
+{
+	for(int i = 0; i < Objects.Num(); i++)
+	{
+		if(Objects[i].Actor.IsValid())
+		{
+			if(Objects[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
+			{
+				// TODO: This check might not be needed since the traces should always start outside the agents collider
+				if(Guid != Cast<ANAIAgentClient>(Objects[i].Actor.Get())->GetGuid())
+				{
+					// If we got here then it means with DID hit an agent, and it WAS NOT this one
+					return true; // Don't need to check any others since only one needs to be in the way
+				}
+			}
+		}
+	}
+	return false;
+}
+
 TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults)
 {
 	TArray<FVector> Locations;
@@ -312,7 +415,7 @@ TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<F
 #undef ENABLE_DEBUG_PRINT_SCREEN
 
 void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& Goal,
-                                          const FAgentNavigationProperties& NavigationProperties) const
+	const FNavAgentProperties& NavAgentProperties, const FNavPathQueryDelegate& PathDelegate) const
 {
 	FPathFindingQuery PathfindingQuery;
 	PathfindingQuery.StartLocation = Start;
@@ -321,9 +424,9 @@ void ANAIAgentManager::AgentPathTaskAsync(const FVector& Start, const FVector& G
 	PathfindingQuery.NavData = NavDataRef;
 	
 	NavSysRef->FindPathAsync(
-		NavigationProperties.NavAgentProperties,
+		NavAgentProperties,
 		PathfindingQuery,
-		NavigationProperties.NavPathQueryDelegate,
+		PathDelegate,
 		EPathFindingMode::Regular
 	);
 }
