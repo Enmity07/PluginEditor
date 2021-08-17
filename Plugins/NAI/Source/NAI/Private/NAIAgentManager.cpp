@@ -5,6 +5,7 @@
 #include "DrawDebugHelpers.h"
 #include "NAIAgentClient.h"
 #include "Async/Async.h"
+#include "Engine/CollisionProfile.h"
 #include "Kismet/KismetMathLibrary.h"
 
 #define NULL_VECTOR FVector(125.0f, 420.0f, -31700.4f)
@@ -87,7 +88,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 	//	}
 	//	UE_LOG(LogTemp, Warning, TEXT("---End---"));
 	//}
-
+	
 	if(WorldRef)
 	{
 		const int AgentCount = AgentMap.Num();
@@ -122,7 +123,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					
 					AgentPathTaskAsync(AgentLocation, GoalLocation,
 						Agent.AgentProperties.NavigationProperties.NavAgentProperties,
-						Agent.PathTask.GetOnCompleteDelegate()); // start the task
+						Agent.PathTask.GetOnCompleteDelegate());
 					Agent.PathTask.Reset(); // Reset the timer
 				}
 

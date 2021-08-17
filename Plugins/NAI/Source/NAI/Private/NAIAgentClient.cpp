@@ -134,4 +134,8 @@ void ANAIAgentClient::BeginPlay()
 		//  Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("AGENT COULD NOT FIND MANAGER!"));
+	}
 }

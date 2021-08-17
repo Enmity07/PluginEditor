@@ -82,6 +82,11 @@ struct NAI_API FAgentTimedProperty
 	FORCEINLINE void AddTimeRaw(const float InTime) { Time += InTime; }
 };
 
+/**
+ * This serves as the base type for all the Agents tasks.
+ * It's just simply a timer which need to be initialized and
+ * incremented.
+ */
 struct NAI_API FAgentSimpleTask
 {
 private:
@@ -92,22 +97,32 @@ public:
 		TaskTimer.TickRate = InTickRate;
 	}
 	
-	FORCEINLINE void IncrementTimers(const float DeltaTime)
+	virtual FORCEINLINE void IncrementTimers(const float DeltaTime)
 	{
 		TaskTimer.AddTime(DeltaTime);
 	}
 	
 	FORCEINLINE void Reset() { TaskTimer.Reset(); }
 	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
+
+	virtual ~FAgentSimpleTask() { } // Need this
 };
 
+/**
+ * Simple container type for holding the Result type
+ * for a given task, which has a result.
+ */
 template<typename TResultType>
 struct NAI_API TAgentResultContainer
 {
+	/** How long before the Task becomes too old. */
 	float Lifespan;
+	/** Used to check whether or not the result has been used. */
 	uint8 bIsDirty : 1;
-	
+	/** The result type which hold the actual result. */
 	TResultType Result;
+	/** How old the latest result is. We compare this against lifespan
+	 * to figure out if the result is too old. */
 	FAgentTimedProperty Age;
 
 	TAgentResultContainer()
@@ -115,12 +130,12 @@ struct NAI_API TAgentResultContainer
 	{ }
 };
 
-template<typename TResultType, typename TOnCompleteDelegate>
+template<typename TResultType, typename TDelegateType>
 struct NAI_API TAgentTask : FAgentSimpleTask
 {
 private:
 	TAgentResultContainer<TResultType> ResultContainer;
-	TOnCompleteDelegate OnCompleteDelegate;
+	TDelegateType OnCompleteDelegate;
 	
 public:
 	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
@@ -129,7 +144,7 @@ public:
 		ResultContainer.Lifespan = InLifespan;
 	}
 	
-	FORCEINLINE void IncrementTimers(const float DeltaTime)
+	virtual FORCEINLINE void IncrementTimers(const float DeltaTime) override
 	{
 		FAgentSimpleTask::IncrementTimers(DeltaTime);
 		ResultContainer.Age.AddTimeRaw(DeltaTime);
@@ -143,36 +158,62 @@ public:
 		ResultContainer.Age.Reset();
 	}
 
-	FORCEINLINE TOnCompleteDelegate& GetOnCompleteDelegate() { return OnCompleteDelegate; }
+	FORCEINLINE TDelegateType& GetOnCompleteDelegate() { return OnCompleteDelegate; }
 };
 
-struct NAI_API FAgentPathResult
+template<typename TResultType, typename TDelegateType, uint8 TTaskCount = 1>
+struct NAI_API TAgentMultiTask
 {
-	uint8 bIsValidPath : 1;
+	TAgentTask<TAgentResultContainer<TResultType>, TDelegateType> Tasks[TTaskCount];
+
+	FORCEINLINE void InitializeTasks(const float InTickRates, const float InLifespans)
+	{
+		for(uint8 i = 0; i < TTaskCount; i++)
+		{
+			Tasks[i].InitializeTask(InTickRates, InLifespans);
+		}
+	}
+
+	FORCEINLINE void IncrementTaskTimers(const float DeltaTime)
+	{
+		for(uint8 i = 0; i < TTaskCount; i++)
+		{
+			Tasks[i].IncrementTimers(DeltaTime);
+		}
+	}
+};
+
+struct NAI_API FAgentResultBase
+{
+	uint8 bIsValidResult : 1;
+
+	FAgentResultBase()
+		: bIsValidResult(false)
+	{ }
+};
+
+struct NAI_API FAgentPathResult : FAgentResultBase
+{
 	TArray<FNavPathPoint> Points;
 
-	FAgentPathResult()
-		: bIsValidPath(false)
+	FAgentPathResult(const uint8 InIsValidPath, const TArray<FNavPathPoint>& InPathPoints)
+		: Points(InPathPoints)
 	{ }
 
-	FAgentPathResult(const uint8 InIsValidPath, const TArray<FNavPathPoint>& InPathPoints)
-		: bIsValidPath(0), Points(InPathPoints)
-	{ }
+	FAgentPathResult() { } // Need this
 };
 
-struct NAI_API FAgentTraceResult
+struct NAI_API FAgentTraceResult : FAgentResultBase
 {
-	/** Result may be invalid if the trace didnt hit anything */
-	uint8 bIsValidResult : 1;
 	/** Vector that represents  the hit location if we hit one */
 	FVector DetectedHitLocation;
 
 	FAgentTraceResult()
-		: bIsValidResult(false), DetectedHitLocation(FVector())
+		: DetectedHitLocation(FVector())
 	{ }
 	
 	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
-		: bIsValidResult(InIsValid), DetectedHitLocation(InLocation)
+		: DetectedHitLocation(InLocation)
 	{ }
 	
 	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
@@ -337,17 +378,14 @@ struct NAI_API FAgent
 	 */
 	FAgentProperties AgentProperties;
 	
-	/**
-	 * When an Async Pathfinding job has completed, it calls
-	 * a delegate on the AgentClient which will in turn update this
-	 * with a new path for the Agent.
-	 */
 	TAgentTask<FAgentPathResult, FNavPathQueryDelegate> PathTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceFrontTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceRightTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceLeftTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
+
+	TAgentMultiTask<FAgentTraceResult, FTraceDelegate> StepCheckTasks;
 
 	FAgentSimpleTask MoveTask;
 
@@ -454,11 +492,14 @@ public:
 		FloorCheckTask.IncrementTimers(DeltaTime);
 		StepCheckTask.IncrementTimers(DeltaTime);
 
+		StepCheckTasks.IncrementTaskTimers(DeltaTime);
+		
 		MoveTask.IncrementTimers(DeltaTime);
 	}
 
 	/**
-	 * TODO: Document this
+	 * Update the Speed of the AgentClient,
+	 * this is so users can easily check the speed of the Agent.
 	 * @param Location Location of the Agent.
 	 * @param DeltaTime Time passed since last frame.
 	 */
@@ -475,7 +516,21 @@ public:
 };
 
 /**
- * TODO: Document this
+ * This is the AgentManager. It serves as the "Brain"
+ * behind each and every AI, or "Agent". All movement,
+ * related tasks, like pathfinding, then following that path,
+ * then local avoidance, stepping up/down ledges/stairs, and
+ * anything else related to moving and Agent. This avoids the
+ * need for a Controller, and it prevents having loads of AI's
+ * which all each implement their own Tick() function. Having
+ * everything be done in one object like this, significantly
+ * improves performance.
+ *
+ * Everything in here is designed to be as tight as possible
+ * when it comes to memory usage. We don't really care about
+ * the amount of memory used since it's tiny anyway, but we do
+ * care about avoiding references and the heap as much as possible
+ * so we can abuse the stack for the speed benefits. 
  */
 UCLASS(BlueprintType)
 class NAI_API ANAIAgentManager : public AActor
@@ -502,6 +557,7 @@ protected:
 	/** Called when the game starts or when spawned */
 	virtual void BeginPlay() override;
 
+	/** Called when the game end or when destroyed. */
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
@@ -583,10 +639,10 @@ public:
 	}
 
 	/**
-	 * @brief 
-	 * @param Guid 
-	 * @param HitLocation 
-	 * @param bStepDetected 
+	 * Update the result for the Step Check Task. 
+	 * @param Guid The Guid of the Agent this update is for.
+	 * @param HitLocation The location the trace hit.
+	 * @param bStepDetected Whether or not a hit location was detected.
 	 */
 	FORCEINLINE void UpdateAgentStepCheckResult(
 		const FGuid& Guid, const FVector& HitLocation, const bool bStepDetected)
@@ -656,10 +712,10 @@ private:
 private:
 	/**
 	 * // TODO: Document this
-	 * @param Start 
-	 * @param Goal 
-	 * @param NavAgentProperties
-	 * @param PathDelegate 
+	 * @param Start The location this Pathfinding task starts from.
+	 * @param Goal The location this Pathfinding task is to.
+	 * @param NavAgentProperties The properties from this Agent related to the NavMesh settings.
+	 * @param PathDelegate The delegate to be executed on completion of this task.
 	 */
 	void AgentPathTaskAsync(
 		const FVector& Start,
@@ -670,12 +726,12 @@ private:
 	
 	/**
 	 * // TODO: Document this
-	 * @param TraceDirection
-	 * @param AgentLocation 
-	 * @param Forward 
-	 * @param Right 
-	 * @param AgentProperties
-	 * @param TraceDirectionDelegate 
+	 * @param TraceDirection The Direction or Side of the agent this Trace is for.
+	 * @param AgentLocation The location of the Agent.
+	 * @param Forward The forward vector of the Agent.
+	 * @param Right The right vector of the Agent.
+	 * @param AgentProperties The properties we need from the Agent for this Task.
+	 * @param TraceDirectionDelegate The delegate to be executed on completion of the Task.
 	 */
 	void AgentAvoidanceTraceTaskAsync(
 		const EAgentAvoidanceTraceDirection& TraceDirection,
