@@ -251,6 +251,8 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						}
 
 						// Calculate the difference in movement
+						// This difference calc is also done inside the FindLookAtRotation function below,
+						// so we're doing this twice...replace the function
 						const FVector MoveDelta = NewLoc - AgentLocation;
 
 						// Calculate our new rotation
@@ -260,11 +262,14 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 							LookAtRotation, Agent.AgentProperties.LookAtRotationRate
 						);
 
+						FHitResult Hit; // TODO: Perhaps can get rid of the floor/step check thanks to this 
+						
 						// We directly move the agent by moving it's root component as it avoids a shit load
 						// of function calls, along with extra GetActorLocation() function calls
 						// when we already have the agents location in this scope, before we finally get to this function
 						// so we're directly calling it here instead of SetActorLocation() / SetActorRotation()
-						Agent.AgentClient->GetRootComponent()->MoveComponent(MoveDelta, LerpRotation, true);
+						Agent.AgentClient->GetRootComponent()->MoveComponent(
+							MoveDelta, LerpRotation, true, &Hit);
 					}
 					
 					Agent.MoveTask.Reset();
@@ -281,11 +286,14 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 	}
 }
 
-#undef ENABLE_DEBUG_DRAW_LINE
+#define ENABLE_DEBUG_PRINT_SCREEN			true
 
-#define ENABLE_DEBUG_DRAW_LINE				true
-#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
-#define ENABLE_DEBUG_PRINT_SCREEN			false
+#if (ENABLE_DEBUG_PRINT_SCREEN)
+	#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		true
+#else
+	#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
+#endif
+
 
 void ANAIAgentManager::OnAsyncPathComplete(
 	uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer,

@@ -167,7 +167,7 @@ public:
 // delicate af type... sometimes it produces compile errors related to being
 // unable to access a function on a given task... even the resharper gains and loses
 // vision of the functions... even picking up a single element as the whole array
-// my need to typedef/using this in some capacity, to make the types less ambiguous.
+// may need to typedef/using this in some capacity, to make the types less ambiguous.
 template<typename TResultType, typename TDelegateType, uint8 TTaskCount = 1>
 struct NAI_API TAgentMultiTask
 {
@@ -218,7 +218,7 @@ struct NAI_API TAgentMultiTask
 			Tasks[Index].GetOnCompleteDelegate() : Tasks[TTaskCount].GetOnCompleteDelegate();
 	}
 	
-	FORCEINLINE void GetAllResults(
+	FORCEINLINE void GetAllResultsFast(
 		TArray<TResultType, TInlineAllocator<TTaskCount>>& OutResults) const
 	{
 		foreach(Task& : Tasks)
@@ -226,6 +226,8 @@ struct NAI_API TAgentMultiTask
 			OutResults.Append(Task.GetResult());
 		}
 	}
+
+	FORCEINLINE uint8 GetTaskCount() { return TTaskCount; }
 };
 
 struct NAI_API FAgentResultBase
@@ -402,6 +404,8 @@ struct NAI_API FAgent
 {
 	GENERATED_BODY()
 
+	FVector SegmentDirection;
+	
 	/**
 	 * A copy of the Guid for this Agent.
 	 * This is used for easy identification, and to allow iteration
