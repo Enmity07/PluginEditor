@@ -138,7 +138,7 @@ private:
 	TDelegateType OnCompleteDelegate;
 	
 public:
-	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan)
+	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan = InTickRate)
 	{
 		FAgentSimpleTask::InitializeTask(InTickRate);
 		ResultContainer.Lifespan = InLifespan;
@@ -161,24 +161,69 @@ public:
 	FORCEINLINE TDelegateType& GetOnCompleteDelegate() { return OnCompleteDelegate; }
 };
 
+/** TODO: don't stop hating this bs  */
+#define foreach(...) for(auto __VA_ARGS__)
+
+// delicate af type... sometimes it produces compile errors related to being
+// unable to access a function on a given task... even the resharper gains and loses
+// vision of the functions... even picking up a single element as the whole array
+// my need to typedef/using this in some capacity, to make the types less ambiguous.
 template<typename TResultType, typename TDelegateType, uint8 TTaskCount = 1>
 struct NAI_API TAgentMultiTask
 {
-	TAgentTask<TAgentResultContainer<TResultType>, TDelegateType> Tasks[TTaskCount];
+	TArray<TAgentTask<TAgentResultContainer<TResultType>, TDelegateType>,
+		TInlineAllocator<TTaskCount>> Tasks;
 
-	FORCEINLINE void InitializeTasks(const float InTickRates, const float InLifespans)
+	TAgentMultiTask()
+	{ }
+	~TAgentMultiTask()
+	{ }
+	
+	FORCEINLINE void InitializeTasks(
+		const float InTickRates, const float InLifespans = InTickRates)
 	{
-		for(uint8 i = 0; i < TTaskCount; i++)
+		foreach(Task : Tasks)
 		{
-			Tasks[i].InitializeTask(InTickRates, InLifespans);
+			Task.InitializeTask(InTickRates, InLifespans);
 		}
 	}
 
-	FORCEINLINE void IncrementTaskTimers(const float DeltaTime)
+	FORCEINLINE void IncrementTaskTimers(const float DeltaTime = 0.0f)
 	{
-		for(uint8 i = 0; i < TTaskCount; i++)
+		foreach(Task : Tasks)
 		{
-			Tasks[i].IncrementTimers(DeltaTime);
+			Task.IncrementTimers(DeltaTime);
+		}
+	}
+
+	FORCEINLINE TAgentTask<TAgentResultContainer<TResultType>, TDelegateType>& GetTask(
+		const uint8 Index = 0) const
+	{
+		/** Get the last task if the given Index is out of range */
+		return !(Index > TTaskCount) ?
+			Tasks[Index] : Tasks[TTaskCount];
+	}
+
+	FORCEINLINE TResultType& GetTaskResult(const uint8 Index = 0) const
+	{
+		/** Get the last task if the given Index is out of range */
+		return !(Index > TTaskCount) ?
+			Tasks[Index].GetResult() : Tasks[TTaskCount].GetResult();
+	}
+
+	FORCEINLINE TDelegateType& GetTaskOnCompleteDelegate(const uint8 Index = 0) const
+	{
+		/** Get the last task if the given Index is out of range */
+		return !(Index > TTaskCount) ?
+			Tasks[Index].GetOnCompleteDelegate() : Tasks[TTaskCount].GetOnCompleteDelegate();
+	}
+	
+	FORCEINLINE void GetAllResults(
+		TArray<TResultType, TInlineAllocator<TTaskCount>>& OutResults) const
+	{
+		foreach(Task& : Tasks)
+		{
+			OutResults.Append(Task.GetResult());
 		}
 	}
 };
@@ -198,7 +243,7 @@ struct NAI_API FAgentPathResult : FAgentResultBase
 
 	FAgentPathResult(const uint8 InIsValidPath, const TArray<FNavPathPoint>& InPathPoints)
 		: Points(InPathPoints)
-	{ }
+	{ bIsValidResult = InIsValidPath; }
 
 	FAgentPathResult() { } // Need this
 };
@@ -214,7 +259,7 @@ struct NAI_API FAgentTraceResult : FAgentResultBase
 	
 	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
 		: DetectedHitLocation(InLocation)
-	{ }
+	{ bIsValidResult = InIsValid; }
 	
 	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
 	FORCEINLINE float GetHitZValue() const { return DetectedHitLocation.Z; }
@@ -385,7 +430,7 @@ struct NAI_API FAgent
 	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
 
-	TAgentMultiTask<FAgentTraceResult, FTraceDelegate> StepCheckTasks;
+	TAgentMultiTask<FAgentTraceResult, FTraceDelegate, 8> StepCheckTasks;
 
 	FAgentSimpleTask MoveTask;
 
@@ -584,7 +629,8 @@ public:
 	FORCEINLINE void RemoveAgent(const FGuid& Guid)
 	{
 		AgentMap.Remove(Guid);
-		AgentGuids.Remove(Guid);
+		const uint32 Index = AgentGuids.IndexOfByKey(Guid);
+		AgentGuids.RemoveAtSwap(Index);
 	}
 	
 	/**

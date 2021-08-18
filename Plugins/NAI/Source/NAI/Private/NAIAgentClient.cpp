@@ -79,6 +79,8 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AvoidanceLeftTask.InitializeTask(AvoidanceTickInterval, 0.5f);
 		Agent.FloorCheckTask.InitializeTask(0.01f, 0.5f);
 		Agent.StepCheckTask.InitializeTask(0.01f, 0.5f);
+
+		Agent.StepCheckTasks.InitializeTasks(1.0f, 1.0f);
 		
 		Agent.MoveTask.InitializeTask(MoveTickInterval);
 		
