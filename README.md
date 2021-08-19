@@ -1,6 +1,6 @@
 # PluginEditor - N-AI Plugin
 
-###Introduction
+## Introduction
 This repo contains the .uproject that is being used
 to develop a UE4/UE5 plugin called N-AI, which is 
 intended to be an all inclusive solution for creating
@@ -44,7 +44,7 @@ to do things to each agent via the Manager asset.
 Having only one asset Tick, instead of
 thousands instantly saves a load of frames.
 
-###The Plugin
+## The Plugin
 
 The NAI Plugin is my work so far on implementing this. It’s still a heavy 
 work-in-progress, but there’s a lot of stuff in 
