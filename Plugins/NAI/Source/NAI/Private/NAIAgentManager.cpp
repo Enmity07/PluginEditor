@@ -5,11 +5,13 @@
 #include "DrawDebugHelpers.h"
 #include "NAIAgentClient.h"
 #include "Async/Async.h"
-#include "Engine/CollisionProfile.h"
 #include "Kismet/KismetMathLibrary.h"
+#include "Kismet/KismetSystemLibrary.h"
 
 #define NULL_VECTOR FVector(125.0f, 420.0f, -31700.4f)
 #define MAX_AGENT_PRE_ALLOC 1024
+
+#define ZERO_QUAT FQuat(0.0f, 0.0f, 0.0f, 0.0f)
 
 bool UAgentManagerStatics::bManagerExists = false;
 ANAIAgentManager* UAgentManagerStatics::CurrentManager = nullptr;
@@ -209,8 +211,29 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						FCollisionQueryParams::DefaultQueryParam,
 						&Agent.StepCheckTask.GetOnCompleteDelegate()
 					);
+				}
+
+				const FAgentVirtualCapsuleSweepProperties CapsuleSweepProperties
+					= Agent.AgentProperties.NavigationProperties.LocalBoundsCheckProperties; 
+
+				if(Agent.LocalBoundsCheckTask.IsReady())
+				{
+					const FVector EndPoint = AgentLocation - FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
 					
-					Agent.StepCheckTask.Reset();
+					WorldRef->AsyncSweepByObjectType(
+						EAsyncTraceType::Multi, AgentLocation, EndPoint, ZERO_QUAT,
+						ObjectQueryParams,
+						CapsuleSweepProperties.VirtualCapsule,
+						FCollisionQueryParams::DefaultQueryParam,
+						&Agent.LocalBoundsCheckTask.GetOnCompleteDelegate()
+					);
+
+					UKismetSystemLibrary::DrawDebugCapsule(WorldRef, AgentLocation,
+					CapsuleSweepProperties.HalfHeight, CapsuleSweepProperties.Radius,
+						FRotator(0.0f), FLinearColor(0, 100, 255), 2.0f, 1.0f
+					);
+
+					Agent.LocalBoundsCheckTask.Reset();
 				}
 				
 				/** Execute the movement task TODO: Doc this properly */
@@ -226,7 +249,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						const FVector End = PathPoints[1].Location;
 #if (ENABLE_DEBUG_DRAW_LINE)
 						DrawDebugLine(WorldRef, Start, End, FColor(0, 255, 0),
-                        	false, 2, 0, 2.0f);
+                        	false, 2.0f, 0, 2.0f);
 #endif
 						// Get the direction in a normalized format
 						const FVector Direction = (End - Start).GetSafeNormal();
@@ -242,12 +265,12 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						if(Agent.StepCheckTask.GetResult().bIsValidResult)
 						{
 							NewLoc.Z = (Agent.StepCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+								(Agent.AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
 						else if(Agent.FloorCheckTask.GetResult().bIsValidResult)
 						{			
 							NewLoc.Z = (Agent.FloorCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent.AgentProperties.CapsuleHalfHeight + 5.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+								(Agent.AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
 
 						// Calculate the difference in movement
@@ -262,14 +285,14 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 							LookAtRotation, Agent.AgentProperties.LookAtRotationRate
 						);
 
-						FHitResult Hit; // TODO: Perhaps can get rid of the floor/step check thanks to this 
-						
+						// FHitResult Hit; // TODO: Perhaps can get rid of the floor/step check thanks to this 
+
 						// We directly move the agent by moving it's root component as it avoids a shit load
 						// of function calls, along with extra GetActorLocation() function calls
 						// when we already have the agents location in this scope, before we finally get to this function
 						// so we're directly calling it here instead of SetActorLocation() / SetActorRotation()
 						Agent.AgentClient->GetRootComponent()->MoveComponent(
-							MoveDelta, LerpRotation, true, &Hit);
+							MoveDelta, LerpRotation, true);
 					}
 					
 					Agent.MoveTask.Reset();
@@ -286,14 +309,13 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 	}
 }
 
-#define ENABLE_DEBUG_PRINT_SCREEN			true
+#define ENABLE_DEBUG_PRINT_SCREEN			false 
 
 #if (ENABLE_DEBUG_PRINT_SCREEN)
-	#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		true
+	#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
 #else
 	#define ENABLE_FLOOR_DEBUG_PRINT_SCREEN		false
 #endif
-
 
 void ANAIAgentManager::OnAsyncPathComplete(
 	uint32 PathId, ENavigationQueryResult::Type ResultType, FNavPathSharedPtr NavPointer,
@@ -418,6 +440,44 @@ void ANAIAgentManager::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTra
 		}
 	}
 	UpdateAgentStepCheckResult(Guid, HighestVector, true);
+}
+
+void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid)
+{
+	if(!Handle.IsValid())
+		return;
+
+	if(Data.OutHits.Num() == 0)
+		return;
+
+	if(GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Number of Hits: %d"),
+			Data.OutHits.Num())
+		);
+
+		const uint8 Result = CheckIfBlockedByAgent(Data.OutHits, Guid);
+	
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Is Registering Self: %d"),
+			Result)
+		);
+	}
+
+	foreach(Hit : Data.OutHits)
+	{
+		if(GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(
+				-1, 1.0f, FColor::Yellow,
+				FString::Printf(TEXT("Hit Vector: %s"),
+				*Hit.Location.ToString())
+			);
+		}
+	}
 }
 
 bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid)

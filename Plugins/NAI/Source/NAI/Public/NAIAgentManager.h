@@ -92,7 +92,7 @@ struct NAI_API FAgentSimpleTask
 private:
 	FAgentTimedProperty TaskTimer;
 public:
-	FORCEINLINE void InitializeTask(const float InTickRate)
+	virtual FORCEINLINE void InitializeTask(const float InTickRate)
 	{
 		TaskTimer.TickRate = InTickRate;
 	}
@@ -138,10 +138,10 @@ private:
 	TDelegateType OnCompleteDelegate;
 	
 public:
-	FORCEINLINE void InitializeTask(const float InTickRate, const float InLifespan = InTickRate)
+	virtual FORCEINLINE void InitializeTask(const float InTickRate)
 	{
 		FAgentSimpleTask::InitializeTask(InTickRate);
-		ResultContainer.Lifespan = InLifespan;
+		ResultContainer.Lifespan = InTickRate;
 	}
 	
 	virtual FORCEINLINE void IncrementTimers(const float DeltaTime) override
@@ -233,9 +233,13 @@ struct NAI_API TAgentMultiTask
 struct NAI_API FAgentResultBase
 {
 	uint8 bIsValidResult : 1;
-
+	
 	FAgentResultBase()
 		: bIsValidResult(false)
+	{ }
+	
+	FAgentResultBase(const uint8 InIsValid)
+		: bIsValidResult(InIsValid)
 	{ }
 };
 
@@ -244,8 +248,8 @@ struct NAI_API FAgentPathResult : FAgentResultBase
 	TArray<FNavPathPoint> Points;
 
 	FAgentPathResult(const uint8 InIsValidPath, const TArray<FNavPathPoint>& InPathPoints)
-		: Points(InPathPoints)
-	{ bIsValidResult = InIsValidPath; }
+		: FAgentResultBase(InIsValidPath), Points(InPathPoints)
+	{ }
 
 	FAgentPathResult() { } // Need this
 };
@@ -343,6 +347,28 @@ struct NAI_API FAgentAvoidanceProperties
 #undef ADVANCED_AVOIDANCE_ROWS
 #undef AVOIDANCE_WIDTH_MULTIPLIER
 
+struct NAI_API FAgentVirtualCapsuleSweepProperties
+{
+	float Radius;
+	float HalfHeight;
+
+	FCollisionShape VirtualCapsule;
+
+	FAgentVirtualCapsuleSweepProperties()
+		: Radius(0), HalfHeight(0)
+	{ }
+
+	FORCEINLINE void InitializeOrUpdate(
+		const float AgentCapsuleRadius, const float AgentCapsuleHalfHeight
+	)
+	{
+		Radius = AgentCapsuleRadius + 5.0f;
+		HalfHeight = AgentCapsuleHalfHeight + 5.0f;
+
+		VirtualCapsule = FCollisionShape::MakeCapsule(Radius, HalfHeight);
+	}
+};
+
 struct NAI_API FAgentStepCheckProperties
 {
 	float ForwardOffset;
@@ -362,6 +388,8 @@ struct NAI_API FAgentNavigationProperties
 {
 	FNavAgentProperties NavAgentProperties;
 
+	FAgentVirtualCapsuleSweepProperties LocalBoundsCheckProperties;
+	
 	/** Sub-structure containing the Agent's Step Navigation properties. */
 	FAgentStepCheckProperties StepProperties;
 };
@@ -434,7 +462,7 @@ struct NAI_API FAgent
 	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
 
-	TAgentMultiTask<FAgentTraceResult, FTraceDelegate, 8> StepCheckTasks;
+	TAgentTask<FAgentTraceResult, FTraceDelegate> LocalBoundsCheckTask;
 
 	FAgentSimpleTask MoveTask;
 
@@ -541,7 +569,7 @@ public:
 		FloorCheckTask.IncrementTimers(DeltaTime);
 		StepCheckTask.IncrementTimers(DeltaTime);
 
-		StepCheckTasks.IncrementTaskTimers(DeltaTime);
+		LocalBoundsCheckTask.IncrementTimers(DeltaTime);
 		
 		MoveTask.IncrementTimers(DeltaTime);
 	}
@@ -742,6 +770,14 @@ public:
 	 * @param Guid 
 	 */
 	void OnStepCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid);
+
+	/**
+	* @brief 
+	* @param Handle 
+	* @param Data 
+	* @param Guid 
+	*/
+	void OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid);
 
 private:
 	/**

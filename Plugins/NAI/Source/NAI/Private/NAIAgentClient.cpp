@@ -73,24 +73,28 @@ void ANAIAgentClient::BeginPlay()
 		Agent.AgentProperties.LookAtRotationRate = LookAtRotationRate;
 		Agent.AgentProperties.MaxStepHeight = MaxStepHeight;
 
-		Agent.PathTask.InitializeTask(PathfindingTickInterval, 0.5f);
-		Agent.AvoidanceFrontTask.InitializeTask(AvoidanceTickInterval, 0.5f);
-		Agent.AvoidanceRightTask.InitializeTask(AvoidanceTickInterval, 0.5f);
-		Agent.AvoidanceLeftTask.InitializeTask(AvoidanceTickInterval, 0.5f);
-		Agent.FloorCheckTask.InitializeTask(0.01f, 0.5f);
-		Agent.StepCheckTask.InitializeTask(0.01f, 0.5f);
+		Agent.PathTask.InitializeTask(PathfindingTickInterval);
+		Agent.AvoidanceFrontTask.InitializeTask(AvoidanceTickInterval);
+		Agent.AvoidanceRightTask.InitializeTask(AvoidanceTickInterval);
+		Agent.AvoidanceLeftTask.InitializeTask(AvoidanceTickInterval);
+		Agent.FloorCheckTask.InitializeTask(0.01f);
+		Agent.StepCheckTask.InitializeTask(0.01f);
 
-		Agent.StepCheckTasks.InitializeTasks(1.0f, 1.0f);
+		Agent.LocalBoundsCheckTask.InitializeTask(0.02f);
 		
 		Agent.MoveTask.InitializeTask(MoveTickInterval);
 		
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentRadius =
-			Agent.AgentProperties.CapsuleRadius;
+			CapsuleRadius;
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.AgentHeight =
-			(Agent.AgentProperties.CapsuleHalfHeight * 2.0f);
+			(CapsuleHalfHeight * 2.0f);
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanFly = false;
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanJump = false;
 		Agent.AgentProperties.NavigationProperties.NavAgentProperties.bCanSwim = false;
+
+		Agent.AgentProperties.NavigationProperties.LocalBoundsCheckProperties.InitializeOrUpdate(
+			CapsuleRadius, CapsuleHalfHeight
+		);
 		
 		/** Set up avoidance settings. */
 		Agent.AgentProperties.AvoidanceProperties.Initialize(
@@ -133,6 +137,10 @@ void ANAIAgentClient::BeginPlay()
 			AgentManager, &ANAIAgentManager::OnStepCheckTraceComplete, Guid
 		);
 
+		Agent.LocalBoundsCheckTask.GetOnCompleteDelegate().BindUObject(
+			AgentManager, &ANAIAgentManager::OnLocalBoundsCheckTraceComplete, Guid
+		);
+		
 		//  Add the agent to the TMap<FGuid, FAgent> AgentMap, which is for all active agents
 		AgentManager->AddAgent(Agent);
 	}
