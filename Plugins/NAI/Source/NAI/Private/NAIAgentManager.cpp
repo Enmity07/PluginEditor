@@ -285,7 +285,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 							LookAtRotation, Agent.AgentProperties.LookAtRotationRate
 						);
 
-						// FHitResult Hit; // TODO: Perhaps can get rid of the floor/step check thanks to this 
+						// FHitResult Hit; // TODO: Perhaps can get rid of the simgple floor/step check thanks to this 
 
 						// We directly move the agent by moving it's root component as it avoids a shit load
 						// of function calls, along with extra GetActorLocation() function calls
@@ -450,7 +450,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(Data.OutHits.Num() == 0)
 		return;
 
-	/*if(GEngine)
+	if(GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(
 			-1, 1.0f, FColor::Yellow,
@@ -477,7 +477,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 				*Hit.Location.ToString())
 			);
 		}
-	}*/
+	}
 }
 
 bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid)
