@@ -8,8 +8,6 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 
-class UAgentManagerStatics;
-
 ANAIAgentClient::ANAIAgentClient()
 {
 	CapsuleComponent = CreateDefaultSubobject<UCapsuleComponent>(TEXT("Capsule"));
@@ -25,8 +23,7 @@ ANAIAgentClient::ANAIAgentClient()
 	
 	SkeletalMeshComponent = CreateDefaultSubobject<USkeletalMeshComponent>("SkeletalMesh");
 	SkeletalMeshComponent->SetupAttachment(CapsuleComponent);
-	SkeletalMeshComponent->SetReceivesDecals(false);
-	SkeletalMeshComponent->SetCollisionProfileName(TEXT("NoCollision"));
+
 
 	AgentType = EAgentType::PathToPlayer;
 	MoveSpeed = 50.0f;
@@ -37,7 +34,6 @@ ANAIAgentClient::ANAIAgentClient()
 	PathfindingTickInterval = 0.5f;
 	AvoidanceTickInterval = 0.3f;
 	
-	bFindCameraComponentWhenViewTarget = false;
 	bBlockInput = true;
 	
 	PrimaryActorTick.bCanEverTick = false;
@@ -96,13 +92,13 @@ void ANAIAgentClient::BeginPlay()
 			CapsuleRadius, CapsuleHalfHeight
 		);
 		
-		/** Set up avoidance settings. */
+		// Set up avoidance settings.
 		Agent.AgentProperties.AvoidanceProperties.Initialize(
 			AvoidanceLevel,
 			CapsuleRadius, CapsuleHalfHeight
 		);
 
-		/** Set up stepping settings. */
+		// Set up stepping settings. 
 		Agent.AgentProperties.NavigationProperties.StepProperties.Initialize(
 			CapsuleRadius, CapsuleHalfHeight,
 			Agent.AgentProperties.MaxStepHeight

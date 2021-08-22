@@ -73,7 +73,7 @@ void ANAIAgentManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
  * If this is enabled with a lot of agents active in the game it will crash the editor,
  * so use it with caution.
 */
-#define ENABLE_DEBUG_DRAW_LINE true
+#define ENABLE_DEBUG_DRAW_LINE false
 
 void ANAIAgentManager::Tick(const float DeltaTime)
 {
@@ -450,7 +450,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(Data.OutHits.Num() == 0)
 		return;
 
-	if(GEngine)
+	/*if(GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(
 			-1, 1.0f, FColor::Yellow,
@@ -477,7 +477,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 				*Hit.Location.ToString())
 			);
 		}
-	}
+	}*/
 }
 
 bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid)
