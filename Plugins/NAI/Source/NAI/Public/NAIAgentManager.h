@@ -161,9 +161,6 @@ public:
 	FORCEINLINE TDelegateType& GetOnCompleteDelegate() { return OnCompleteDelegate; }
 };
 
-/** TODO: don't stop hating this bs  */
-#define foreach(...) for(auto __VA_ARGS__)
-
 // delicate af type... sometimes it produces compile errors related to being
 // unable to access a function on a given task... even the resharper gains and loses
 // vision of the functions... even picking up a single element as the whole array
@@ -182,17 +179,17 @@ struct NAI_API TAgentMultiTask
 	FORCEINLINE void InitializeTasks(
 		const float InTickRates, const float InLifespans = InTickRates)
 	{
-		foreach(Task : Tasks)
+		for(uint8 i = 0; i < TTaskCount; i++)
 		{
-			Task.InitializeTask(InTickRates, InLifespans);
+			Tasks[i].InitializeTask(InTickRates, InLifespans);
 		}
 	}
 
 	FORCEINLINE void IncrementTaskTimers(const float DeltaTime = 0.0f)
 	{
-		foreach(Task : Tasks)
+		for(uint8 i = 0; i < TTaskCount; i++)
 		{
-			Task.IncrementTimers(DeltaTime);
+			Tasks[i].IncrementTimers(DeltaTime);
 		}
 	}
 
@@ -221,9 +218,9 @@ struct NAI_API TAgentMultiTask
 	FORCEINLINE void GetAllResultsFast(
 		TArray<TResultType, TInlineAllocator<TTaskCount>>& OutResults) const
 	{
-		foreach(Task& : Tasks)
+		for(uint8 i = 0; i < TTaskCount; i++)
 		{
-			OutResults.Append(Task.GetResult());
+			OutResults.Append(Tasks[i].GetResult());
 		}
 	}
 
@@ -269,6 +266,33 @@ struct NAI_API FAgentTraceResult : FAgentResultBase
 	
 	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
 	FORCEINLINE float GetHitZValue() const { return DetectedHitLocation.Z; }
+};
+
+/**/
+struct NAI_API FAgentLocalBoundsCheckResult : FAgentResultBase
+{
+private:
+	FVector HighestHitPoint;
+
+	uint8 bHasMultipleHits : 1;
+public:
+	FAgentLocalBoundsCheckResult(
+		const uint8 InIsValid,
+		const FVector& InHighestHit,
+		const uint8 InHasMultipleHits = false)
+	:
+		HighestHitPoint(InHighestHit),
+		bHasMultipleHits(InHasMultipleHits)
+	{
+		bIsValidResult = InIsValid;
+	}
+	
+	FAgentLocalBoundsCheckResult()
+		: bHasMultipleHits(false)
+	{ }
+
+	FORCEINLINE FVector& GetHighestHitPoint(){ return HighestHitPoint; }
+	FORCEINLINE void SetHighestHitPoint(const FVector& InHighestHit) { HighestHitPoint = InHighestHit; }
 };
 
 // TODO: Get rid of this mess by making everything proportional
@@ -462,7 +486,7 @@ struct NAI_API FAgent
 	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
 
-	TAgentTask<FAgentTraceResult, FTraceDelegate> LocalBoundsCheckTask;
+	TAgentTask<FAgentLocalBoundsCheckResult, FTraceDelegate> LocalBoundsCheckTask;
 
 	FAgentSimpleTask MoveTask;
 
@@ -552,6 +576,18 @@ public:
 		);
 		
 		StepCheckTask.SetResult(NewResult);
+	}
+
+	FORCEINLINE void UpdateLocalBoundsCheckResult(
+		const FVector& HitLocation, const bool bStepDetected)
+	{
+		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
+		const FAgentLocalBoundsCheckResult NewResult = FAgentLocalBoundsCheckResult(
+			bStepDetected,
+			(bStepDetected) ? (HitLocation) : (FVector::ZeroVector)
+		);
+
+		LocalBoundsCheckTask.SetResult(NewResult);
 	}
 	
 	/**
@@ -728,6 +764,12 @@ public:
 		AgentMap[Guid].UpdateStepCheckResult(HitLocation, bStepDetected);
 	}
 
+	FORCEINLINE void UpdateAgentLocalBoundsCheckResult(
+		const FGuid& Guid, const FVector& HighestHit, const bool bIsValid)
+	{
+		AgentMap[Guid].UpdateLocalBoundsCheckResult(HighestHit, bIsValid);
+	}
+	
 	/**
 	 * @brief 
 	 * @param PathId 

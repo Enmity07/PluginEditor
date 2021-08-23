@@ -20,7 +20,6 @@ void UAgentManagerStatics::SetManagerReference(ANAIAgentManager* InManager)
 {
 	if(!InManager)
 		return;
-		
 	CurrentManager = InManager;
 	bManagerExists = true;
 }
@@ -218,10 +217,11 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 
 				if(Agent.LocalBoundsCheckTask.IsReady())
 				{
+					const FVector StartPoint = AgentLocation + FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
 					const FVector EndPoint = AgentLocation - FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
 					
 					WorldRef->AsyncSweepByObjectType(
-						EAsyncTraceType::Multi, AgentLocation, EndPoint, ZERO_QUAT,
+						EAsyncTraceType::Multi, StartPoint, EndPoint, ZERO_QUAT,
 						ObjectQueryParams,
 						CapsuleSweepProperties.VirtualCapsule,
 						FCollisionQueryParams::DefaultQueryParam,
@@ -450,14 +450,9 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(Data.OutHits.Num() == 0)
 		return;
 
+#if (ENABLE_DEBUG_PRINT_SCREEN)
 	if(GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(
-			-1, 1.0f, FColor::Yellow,
-			FString::Printf(TEXT("Number of Hits: %d"),
-			Data.OutHits.Num())
-		);
-
 		const uint8 Result = CheckIfBlockedByAgent(Data.OutHits, Guid);
 	
 		GEngine->AddOnScreenDebugMessage(
@@ -466,17 +461,29 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 			Result)
 		);
 	}
+#endif
 
-	foreach(Hit : Data.OutHits)
+	FVector HighestVector = FVector::ZeroVector;
+	for(const FHitResult& Hit : Data.OutHits)
 	{
-		if(GEngine)
+		if(Hit.ImpactPoint.Z > HighestVector.Z)
 		{
-			GEngine->AddOnScreenDebugMessage(
-				-1, 1.0f, FColor::Yellow,
-				FString::Printf(TEXT("Hit Vector: %s"),
-				*Hit.Location.ToString())
-			);
+			HighestVector = Hit.ImpactPoint;
 		}
+	}
+	
+	if(GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(
+			-1, 1.0f, FColor::Yellow,
+			FString::Printf(TEXT("Hit Name: %s"),
+			*HighestVector.ToString())
+		);
+
+		UKismetSystemLibrary::DrawDebugCapsule(WorldRef, HighestVector,
+	5.0f, 5.0f,
+	FRotator(0.0f), FLinearColor(255, 0, 150), 5.0f, 1.0f
+		);
 	}
 }
 
@@ -488,7 +495,7 @@ bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, 
 		{
 			if(Objects[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
 			{
-				// TODO: This check might not be needed since the traces should always start outside the agents collider
+				// TODO: This check is not needed for line traces since the they should always start outside the agents collider
 				if(Guid != Cast<ANAIAgentClient>(Objects[i].Actor.Get())->GetGuid())
 				{
 					// If we got here then it means with DID hit an agent, and it WAS NOT this one
@@ -510,7 +517,7 @@ TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<F
 		{
 			if(!HitResults[i].Actor.Get()->IsA(ANAIAgentClient::StaticClass()))
 			{
-				Locations.Add(HitResults[i].Location);
+				Locations.Add(HitResults[i].ImpactPoint);
 			}
 		}
 	}
