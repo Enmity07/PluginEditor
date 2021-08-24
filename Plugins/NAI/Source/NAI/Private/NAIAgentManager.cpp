@@ -447,9 +447,26 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(!Handle.IsValid())
 		return;
 
+	/**
+	 * We didn't hit anything at all... this means we're in the air...
+	 * Reset the result with the type's default constructor
+	 */
 	if(Data.OutHits.Num() == 0)
+	{
+		UpdateAgentLocalBoundsCheckResult(Guid, FAgentLocalBoundsCheckResult());
 		return;
+	}
 
+	/** Handle Singular Hit output */
+	if(Data.OutHits.Num() == 1)
+	{
+		UpdateAgentLocalBoundsCheckResult(Guid, FAgentLocalBoundsCheckResult(true, Data.OutHits.Last().ImpactPoint));
+		return;
+	}
+
+	/** IF we got here it means we have multiple hits. */
+
+	
 #if (ENABLE_DEBUG_PRINT_SCREEN)
 	if(GEngine)
 	{
@@ -487,7 +504,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	}
 }
 
-bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid)
+bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid) const
 {
 	for(int i = 0; i < Objects.Num(); i++)
 	{
@@ -507,7 +524,7 @@ bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, 
 	return false;
 }
 
-TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults)
+TArray<FVector> ANAIAgentManager::GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults) const
 {
 	TArray<FVector> Locations;
 	

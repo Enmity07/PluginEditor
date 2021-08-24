@@ -103,7 +103,7 @@ public:
 	}
 	
 	FORCEINLINE void Reset() { TaskTimer.Reset(); }
-	FORCEINLINE uint8 IsReady() const { return TaskTimer.bIsReady; }
+	FORCEINLINE bool IsReady() const { return TaskTimer.bIsReady; }
 
 	virtual ~FAgentSimpleTask() { } // Need this
 };
@@ -150,7 +150,7 @@ public:
 		ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
 	
-	FORCEINLINE TResultType& GetResult() { return ResultContainer.Result; }
+	FORCEINLINE const TResultType& GetResult() const { return ResultContainer.Result; }
 	
 	FORCEINLINE void SetResult(const TResultType& InResult)
 	{
@@ -224,7 +224,7 @@ struct NAI_API TAgentMultiTask
 		}
 	}
 
-	FORCEINLINE uint8 GetTaskCount() { return TTaskCount; }
+	FORCEINLINE const uint8& GetTaskCount() const { return TTaskCount; }
 };
 
 struct NAI_API FAgentResultBase
@@ -261,11 +261,12 @@ struct NAI_API FAgentTraceResult : FAgentResultBase
 	{ }
 	
 	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
-		: DetectedHitLocation(InLocation)
-	{ bIsValidResult = InIsValid; }
+		: FAgentResultBase(InIsValid),
+		DetectedHitLocation(InLocation)
+	{ }
 	
-	FORCEINLINE uint8 IsBlocked() const { return bIsValidResult; }
-	FORCEINLINE float GetHitZValue() const { return DetectedHitLocation.Z; }
+	FORCEINLINE bool IsBlocked() const { return bIsValidResult; }
+	FORCEINLINE const float& GetHitZValue() const { return DetectedHitLocation.Z; }
 };
 
 /**/
@@ -275,27 +276,35 @@ private:
 	FVector HighestHitPoint;
 
 	uint8 bHasMultipleHits : 1;
+	TArray<FVector> HitPoints;
 public:
 	FAgentLocalBoundsCheckResult(
-		const uint8 InIsValid,
-		const FVector& InHighestHit,
-		const uint8 InHasMultipleHits = false)
+		const uint8 InIsValid = false,
+		const FVector& InHighestHit = FVector(),
+		const uint8 InHasMultipleHits = false,
+		const TArray<FVector> InHitPoints = TArray<FVector>())
 	:
+		FAgentResultBase(InIsValid),
 		HighestHitPoint(InHighestHit),
-		bHasMultipleHits(InHasMultipleHits)
-	{
-		bIsValidResult = InIsValid;
-	}
-	
-	FAgentLocalBoundsCheckResult()
-		: bHasMultipleHits(false)
+		bHasMultipleHits(InHasMultipleHits),
+		HitPoints(InHitPoints)
 	{ }
 
-	FORCEINLINE FVector& GetHighestHitPoint(){ return HighestHitPoint; }
+	FORCEINLINE void Reset() { FAgentLocalBoundsCheckResult(); }
+	
+	FORCEINLINE const FVector& GetHighestHitPoint() const { return HighestHitPoint; }
 	FORCEINLINE void SetHighestHitPoint(const FVector& InHighestHit) { HighestHitPoint = InHighestHit; }
+
+	FORCEINLINE bool GetHasMultipleHits() const { return bHasMultipleHits; }
+	FORCEINLINE void SetHasMultipleHits(const uint8& InHasMultipleHits) { bHasMultipleHits = InHasMultipleHits; }
+
+	FORCEINLINE const TArray<FVector>& GetHitPoints() const { return HitPoints; }
+	FORCEINLINE void SetHitPointByIndex(const uint32 Index = 0, const FVector& InHitPoint) { HitPoints[Index] = InHitPoint; }
+	FORCEINLINE void SetHitPoints(const TArray<FVector>& InHitPoints) { HitPoints = InHitPoints; }
 };
 
 // TODO: Get rid of this mess by making everything proportional
+// TODO: Actually preform encapsulation here
 // to the agent's size
 #define NORMAL_AVOIDANCE_COLUMNS		3
 #define ADVANCED_AVOIDANCE_COLUMNS		5
@@ -526,7 +535,7 @@ public:
 		const bool bInResult)
 	{
 		const FAgentTraceResult NewResult = FAgentTraceResult(
-			bInResult, FVector::ZeroVector);
+			bInResult, FVector());
 	
 		switch(InDirection)
 		{
@@ -555,7 +564,7 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bSuccess,
-			(bSuccess) ? (HitLocation) : (FVector::ZeroVector)
+			(bSuccess) ? (HitLocation) : (FVector())
 		);
 		
 		FloorCheckTask.SetResult(NewResult);
@@ -572,22 +581,16 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bStepDetected,
-			(bStepDetected) ? (HitLocation) : (FVector::ZeroVector)
+			(bStepDetected) ? (HitLocation) : (FVector())
 		);
 		
 		StepCheckTask.SetResult(NewResult);
 	}
 
 	FORCEINLINE void UpdateLocalBoundsCheckResult(
-		const FVector& HitLocation, const bool bStepDetected)
+		const FAgentLocalBoundsCheckResult& InResult)
 	{
-		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
-		const FAgentLocalBoundsCheckResult NewResult = FAgentLocalBoundsCheckResult(
-			bStepDetected,
-			(bStepDetected) ? (HitLocation) : (FVector::ZeroVector)
-		);
-
-		LocalBoundsCheckTask.SetResult(NewResult);
+		LocalBoundsCheckTask.SetResult(InResult);
 	}
 	
 	/**
@@ -765,9 +768,9 @@ public:
 	}
 
 	FORCEINLINE void UpdateAgentLocalBoundsCheckResult(
-		const FGuid& Guid, const FVector& HighestHit, const bool bIsValid)
+		const FGuid& Guid, const FAgentLocalBoundsCheckResult& InResult)
 	{
-		AgentMap[Guid].UpdateLocalBoundsCheckResult(HighestHit, bIsValid);
+		AgentMap[Guid].UpdateLocalBoundsCheckResult(InResult);
 	}
 	
 	/**
@@ -823,19 +826,19 @@ public:
 
 private:
 	/**
+	* @brief 
+	* @param Objects 
+	* @param Guid 
+	* @return 
+	*/
+	bool CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid) const;
+	
+	/**
 	 * @brief 
 	 * @param HitResults 
 	 * @return  
 	 */
-	TArray<FVector> GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults);
-
-	/**
-	 * @brief 
-	 * @param Objects 
-	 * @param Guid 
-	 * @return 
-	 */
-	bool CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid);
+	TArray<FVector> GetAllHitLocationsNotFromAgents(const TArray<FHitResult>& HitResults) const;
 	
 private:
 	/**

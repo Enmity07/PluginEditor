@@ -1,11 +1,19 @@
-# PluginEditor - N-AI Plugin
+![NoxxProjects Logo](https://lh3.googleusercontent.com/pw/AM-JKLUACRdnWpy8JD4ImQ4cmmkTvhx6x_x-dfieSJKFySk8E8f_Gd_MY88ljT0KgAtNhOD8joNrkbg2yIrKc5bjhA4pKb3s4337QnOYpW15Mds65too1LErqbW7RemrwTuI43yhqAb5Rpnh_JUP4BX5cPwy=w399-h44-no?authuser=0)
 
-## Introduction
+# N-AI
 This repo contains the .uproject that is being used
 to develop a UE4/UE5 plugin called N-AI, which is 
 intended to be an all inclusive solution for creating
 AI's on massive scales.
 
+##TOC
+* [Introduction](#introduction)
+* [The Plugin](#the-plugin)
+* [Installation Instructions](#installation-instructions)
+* [Usage](#usage)
+* [Licence](#licence)
+
+## Introduction
 I'll do a better job of describing this in future, but
 for now, on the point of AI on massive scales, it is 
 true that achieving high quality pathfollowing 
@@ -45,7 +53,6 @@ Having only one asset Tick, instead of
 thousands instantly saves a load of frames.
 
 ## The Plugin
-
 The NAI Plugin is my work so far on implementing this. It’s still a heavy 
 work-in-progress, but there’s a lot of stuff in 
 there already, including a lot of use of Unreal’s 
@@ -56,3 +63,24 @@ Marketplace once it’s completed, but in the
 meantime while I’m working on it, feel free 
 to use it for reference, or to copy. It will
 eventually become a private repo, however.
+
+## Installation Instructions
+1. Make sure you're using UE4 version is 4.27.
+2. Create a new project.
+3. Inside the directory for your new project, 
+create a folder called Plugins, with an uppercase P.
+4. Copy the NAI directory, located in the Plugins
+folder of this repo, into your projects newly created
+Plugins folder.
+5. Restart/Open the engine.
+6. From within Unreal, open up the Plugins window,
+then search for "N-AI", with the hyphen.
+7. Enable the Plugin, then restart the engine.
+8. 
+## Usage
+_*Todo_
+
+##Licence
+This Plugin uses the GPL licence. So basically,
+you can do what you want with whatever you find
+in here.
