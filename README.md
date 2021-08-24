@@ -8,7 +8,7 @@ to develop a UE4/UE5 plugin called N-AI, which is
 intended to be an all inclusive solution for creating
 AI's on massive scales.
 
-##TOC
+## TOC
 * [Introduction](#introduction)
 * [The Plugin](#the-plugin)
 * [Installation Instructions](#installation-instructions)
@@ -78,11 +78,11 @@ Plugins folder.
 6. From within Unreal, open up the Plugins window,
 then search for "N-AI", with the hyphen.
 7. Enable the Plugin, then restart the engine.
-8. 
-## Usage
-_*Todo_
 
-##Licence
+## Usage
+_Todo_
+
+## Licence
 This Plugin uses the GPL licence. So basically,
 you can do what you want with whatever you find
 in here.
