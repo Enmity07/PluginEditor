@@ -1,4 +1,6 @@
-<img align="middle" width="399" height="44" src="https://lh3.googleusercontent.com/pw/AM-JKLUACRdnWpy8JD4ImQ4cmmkTvhx6x_x-dfieSJKFySk8E8f_Gd_MY88ljT0KgAtNhOD8joNrkbg2yIrKc5bjhA4pKb3s4337QnOYpW15Mds65too1LErqbW7RemrwTuI43yhqAb5Rpnh_JUP4BX5cPwy=w399-h44-no?authuser=0" alt="">
+<p align="center">
+  <img width="399" height="44" src="https://lh3.googleusercontent.com/pw/AM-JKLUACRdnWpy8JD4ImQ4cmmkTvhx6x_x-dfieSJKFySk8E8f_Gd_MY88ljT0KgAtNhOD8joNrkbg2yIrKc5bjhA4pKb3s4337QnOYpW15Mds65too1LErqbW7RemrwTuI43yhqAb5Rpnh_JUP4BX5cPwy=w399-h44-no?authuser=0" alt="">
+</p>
 
 # N-AI
 This repo contains the .uproject that is being used
