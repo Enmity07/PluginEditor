@@ -280,7 +280,7 @@ private:
 public:
 	FAgentLocalBoundsCheckResult(
 		const uint8 InIsValid = false,
-		const FVector& InHighestHit = FVector(),
+		const FVector& InHighestHit = FVector::ZeroVector,
 		const uint8 InHasMultipleHits = false,
 		const TArray<FVector> InHitPoints = TArray<FVector>())
 	:
@@ -299,7 +299,7 @@ public:
 	FORCEINLINE void SetHasMultipleHits(const uint8& InHasMultipleHits) { bHasMultipleHits = InHasMultipleHits; }
 
 	FORCEINLINE const TArray<FVector>& GetHitPoints() const { return HitPoints; }
-	FORCEINLINE void SetHitPointByIndex(const uint32 Index = 0, const FVector& InHitPoint) { HitPoints[Index] = InHitPoint; }
+	FORCEINLINE void SetHitPointByIndex(const uint32 Index = 0, const FVector& InHitPoint = FVector::ZeroVector) { HitPoints[Index] = InHitPoint; }
 	FORCEINLINE void SetHitPoints(const TArray<FVector>& InHitPoints) { HitPoints = InHitPoints; }
 };
 
@@ -535,7 +535,7 @@ public:
 		const bool bInResult)
 	{
 		const FAgentTraceResult NewResult = FAgentTraceResult(
-			bInResult, FVector());
+			bInResult, FVector::ZeroVector);
 	
 		switch(InDirection)
 		{
@@ -564,7 +564,7 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bSuccess,
-			(bSuccess) ? (HitLocation) : (FVector())
+			(bSuccess) ? (HitLocation) : (FVector::ZeroVector)
 		);
 		
 		FloorCheckTask.SetResult(NewResult);
@@ -581,7 +581,7 @@ public:
 		// Make sure we set it to 0.0f if the trace failed in order to overwrite the old data
 		const FAgentTraceResult NewResult = FAgentTraceResult(
 			bStepDetected,
-			(bStepDetected) ? (HitLocation) : (FVector())
+			(bStepDetected) ? (HitLocation) : (FVector::ZeroVector)
 		);
 		
 		StepCheckTask.SetResult(NewResult);
@@ -765,12 +765,6 @@ public:
 		const FGuid& Guid, const FVector& HitLocation, const bool bStepDetected)
 	{
 		AgentMap[Guid].UpdateStepCheckResult(HitLocation, bStepDetected);
-	}
-
-	FORCEINLINE void UpdateAgentLocalBoundsCheckResult(
-		const FGuid& Guid, const FAgentLocalBoundsCheckResult& InResult)
-	{
-		AgentMap[Guid].UpdateLocalBoundsCheckResult(InResult);
 	}
 	
 	/**

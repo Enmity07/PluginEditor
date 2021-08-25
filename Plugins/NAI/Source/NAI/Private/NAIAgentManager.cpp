@@ -78,17 +78,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	//TArray<TSharedPtr<FName>> ProfileNames;
-	//UCollisionProfile::GetProfileNames(ProfileNames);
-	//if(ProfileNames.Num() > 0)
-	//{
-	//	UE_LOG(LogTemp, Warning, TEXT("---Start---"));
-	//	for(int i = 0; i < ProfileNames.Num(); i++)
-	//	{
-	//		UE_LOG(LogTemp, Warning, TEXT("Name: %s"), *ProfileNames[i].Get()->ToString());
-	//	}
-	//	UE_LOG(LogTemp, Warning, TEXT("---End---"));
-	//}
+
 	
 	if(WorldRef)
 	{
@@ -97,77 +87,81 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 		{
 			for(int i = 0; i < AgentCount; i++)
 			{
-				// Get the Guid for this iteration, and use it to get a copy of the agent
+				// Get the Guid for this iteration, and use it to get a ref to the agent
 				const FGuid Guid = AgentGuids[i];
-				FAgent Agent = AgentMap[Guid];
+				/**
+				 * Grab a reference to the Agent we want to work on.
+				 * We don't take a copy to avoid having to re-box it after
+				 */
+				FAgent *Agent = &AgentMap[Guid];
 
 				// Update all the agents timers for their tasks
-				Agent.UpdateTimers(DeltaTime);
+				Agent->UpdateTimers(DeltaTime);
 
-				const FVector AgentLocation = Agent.AgentClient->GetActorLocation();
+				const FVector AgentLocation = Agent->AgentClient->GetActorLocation();
 				// Calculate the Agents Speed and update the property on the AgentClient object
-				Agent.CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
+				Agent->CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
 
 				// If the Agent has been set to stop, don't do anything
-		        if(Agent.bIsHalted)
+		        if(Agent->bIsHalted)
 		        {
 		            continue;
 		        }
 
 				/** Execute the Pathfinding Task TODO: Doc this properly */
-				if(Agent.PathTask.IsReady())
+				if(Agent->PathTask.IsReady())
 				{
 					// Get the Goal Location from the Agent type
 					const FVector PlayerLocation = GetActorLocation(); // TODO: GET THE PLAYER!!!
-					const EAgentType AgentType = Agent.AgentProperties.AgentType;
+					const EAgentType AgentType = Agent->AgentProperties.AgentType;
 					const FVector GoalLocation = GetAgentGoalLocationFromType(AgentType, PlayerLocation);
 					
 					AgentPathTaskAsync(AgentLocation, GoalLocation,
-						Agent.AgentProperties.NavigationProperties.NavAgentProperties,
-						Agent.PathTask.GetOnCompleteDelegate());
-					Agent.PathTask.Reset(); // Reset the timer
+						Agent->AgentProperties.NavigationProperties.NavAgentProperties,
+						Agent->PathTask.GetOnCompleteDelegate());
+					Agent->PathTask.Reset(); // Reset the timer
 				}
 
-				const FVector AgentForward = Agent.AgentClient->GetActorForwardVector();
-				const FVector AgentRight = Agent.AgentClient->GetActorRightVector();
+				const FVector AgentForward = Agent->AgentClient->GetActorForwardVector();
+				const FVector AgentRight = Agent->AgentClient->GetActorRightVector();
 				
 				/** Execute the Front avoidance task TODO: Doc this properly */
-				if(Agent.AvoidanceFrontTask.IsReady())
+				if(Agent->AvoidanceFrontTask.IsReady())
 				{
 					AgentAvoidanceTraceTaskAsync(
 						EAgentAvoidanceTraceDirection::TracingFront,
-						AgentLocation, AgentForward, AgentRight, Agent.AgentProperties,
-						Agent.AvoidanceFrontTask.GetOnCompleteDelegate()
+						AgentLocation, AgentForward, AgentRight, Agent->AgentProperties,
+						Agent->AvoidanceFrontTask.GetOnCompleteDelegate()
 					);
 					
-					Agent.AvoidanceFrontTask.Reset();
+					Agent->AvoidanceFrontTask.Reset();
 				}
 
 				/** Is there something in front of the Agent? */
-				if(Agent.AvoidanceFrontTask.GetResult().IsBlocked())
+				if(Agent->AvoidanceFrontTask.GetResult().IsBlocked())
 				{
 					/** Check both sides to see which way the Agent can strafe. */
 					
-					if(Agent.AvoidanceRightTask.IsReady())
+					if(Agent->AvoidanceRightTask.IsReady())
 					{
 						AgentAvoidanceTraceTaskAsync(
 							EAgentAvoidanceTraceDirection::TracingRight,
-							AgentLocation, AgentForward, AgentRight, Agent.AgentProperties,
-							Agent.AvoidanceRightTask.GetOnCompleteDelegate()
+							AgentLocation, AgentForward, AgentRight, Agent->AgentProperties,
+							Agent->AvoidanceRightTask.GetOnCompleteDelegate()
 						);
 
-						Agent.AvoidanceRightTask.Reset();
+						Agent->AvoidanceRightTask.Reset();
 					}
 					
-					if(Agent.AvoidanceLeftTask.IsReady())
+					if(Agent->AvoidanceLeftTask.IsReady())
 					{
 						AgentAvoidanceTraceTaskAsync(
 							EAgentAvoidanceTraceDirection::TracingLeft,
-							AgentLocation, AgentForward, AgentRight, Agent.AgentProperties,
-							Agent.AvoidanceLeftTask.GetOnCompleteDelegate()
+							AgentLocation, AgentForward, AgentRight, Agent->AgentProperties,
+							Agent->AvoidanceLeftTask.GetOnCompleteDelegate()
 						);
 
-						Agent.AvoidanceLeftTask.Reset();
+						Agent->AvoidanceLeftTask.Reset();
 					}
 				}
 
@@ -180,42 +174,42 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 					(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
 
 				/** Conduct the floor check TODO: Doc this properly */
-				if(Agent.FloorCheckTask.IsReady())
+				if(Agent->FloorCheckTask.IsReady())
 				{
 					const FVector StartPoint = FVector(
 						AgentLocation.X, AgentLocation.Y,
-						(AgentLocation.Z - (Agent.AgentProperties.CapsuleHalfHeight - 1.0f)));
+						(AgentLocation.Z - (Agent->AgentProperties.CapsuleHalfHeight - 1.0f)));
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
 					
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
-						&Agent.FloorCheckTask.GetOnCompleteDelegate()
+						&Agent->FloorCheckTask.GetOnCompleteDelegate()
 					);
 					
-					Agent.FloorCheckTask.Reset();
+					Agent->FloorCheckTask.Reset();
 				}
 
 				/** Execute the step check task TODO: Doc this properly */
-				if(Agent.StepCheckTask.IsReady())
+				if(Agent->StepCheckTask.IsReady())
 				{
 					const FVector StartPoint =
 						AgentLocation +
-							(AgentForward * Agent.AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
-							(FVector(0.0f, 0.0f, -1.0f) * Agent.AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
+							(AgentForward * Agent->AgentProperties.NavigationProperties.StepProperties.ForwardOffset) +
+							(FVector(0.0f, 0.0f, -1.0f) * Agent->AgentProperties.NavigationProperties.StepProperties.DownwardOffset);
 					const FVector EndPoint = StartPoint - FVector(0.0f, 0.0f, 100.0f);
 					
 					WorldRef->AsyncLineTraceByObjectType(
 						EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
 						FCollisionQueryParams::DefaultQueryParam,
-						&Agent.StepCheckTask.GetOnCompleteDelegate()
+						&Agent->StepCheckTask.GetOnCompleteDelegate()
 					);
 				}
 
 				const FAgentVirtualCapsuleSweepProperties CapsuleSweepProperties
-					= Agent.AgentProperties.NavigationProperties.LocalBoundsCheckProperties; 
+					= Agent->AgentProperties.NavigationProperties.LocalBoundsCheckProperties; 
 
-				if(Agent.LocalBoundsCheckTask.IsReady())
+				if(Agent->LocalBoundsCheckTask.IsReady())
 				{
 					const FVector StartPoint = AgentLocation + FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
 					const FVector EndPoint = AgentLocation - FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
@@ -225,7 +219,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						ObjectQueryParams,
 						CapsuleSweepProperties.VirtualCapsule,
 						FCollisionQueryParams::DefaultQueryParam,
-						&Agent.LocalBoundsCheckTask.GetOnCompleteDelegate()
+						&Agent->LocalBoundsCheckTask.GetOnCompleteDelegate()
 					);
 
 					UKismetSystemLibrary::DrawDebugCapsule(WorldRef, AgentLocation,
@@ -233,13 +227,13 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						FRotator(0.0f), FLinearColor(0, 100, 255), 2.0f, 1.0f
 					);
 
-					Agent.LocalBoundsCheckTask.Reset();
+					Agent->LocalBoundsCheckTask.Reset();
 				}
 				
 				/** Execute the movement task TODO: Doc this properly */
-				if(Agent.MoveTask.IsReady())
+				if(Agent->MoveTask.IsReady())
 				{
-					const TArray<FNavPathPoint> PathPoints = Agent.PathTask.GetResult().Points;
+					const TArray<FNavPathPoint> PathPoints = Agent->PathTask.GetResult().Points;
 					
 					// No reason to move if we don't have a path
 					if(PathPoints.Num() > 1) // Need at least 2 path points for it to be a path
@@ -254,7 +248,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						// Get the direction in a normalized format
 						const FVector Direction = (End - Start).GetSafeNormal();
 
-						FVector NewLoc = (AgentLocation + (Direction * (Agent.AgentProperties.MoveSpeed * DeltaTime)));
+						FVector NewLoc = (AgentLocation + (Direction * (Agent->AgentProperties.MoveSpeed * DeltaTime)));
 						
 						/** 
 						 * We need to check the step before the floor, since if there is a step
@@ -262,15 +256,15 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						 * then we can just use the floor height.
 						 * TODO: This can be better..
 						 */
-						if(Agent.StepCheckTask.GetResult().bIsValidResult)
+						if(Agent->StepCheckTask.GetResult().bIsValidResult)
 						{
-							NewLoc.Z = (Agent.StepCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent.AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+							NewLoc.Z = (Agent->StepCheckTask.GetResult().DetectedHitLocation.Z +
+								(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
-						else if(Agent.FloorCheckTask.GetResult().bIsValidResult)
+						else if(Agent->FloorCheckTask.GetResult().bIsValidResult)
 						{			
-							NewLoc.Z = (Agent.FloorCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent.AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+							NewLoc.Z = (Agent->FloorCheckTask.GetResult().DetectedHitLocation.Z +
+								(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
 						}
 
 						// Calculate the difference in movement
@@ -281,8 +275,8 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						// Calculate our new rotation
 						FRotator LookAtRotation = UKismetMathLibrary::FindLookAtRotation(AgentLocation, NewLoc);
 						LookAtRotation.Roll	= 0.0f; LookAtRotation.Pitch = 0.0f;
-						const FRotator LerpRotation = FMath::Lerp(Agent.AgentClient->GetActorRotation(),
-							LookAtRotation, Agent.AgentProperties.LookAtRotationRate
+						const FRotator LerpRotation = FMath::Lerp(Agent->AgentClient->GetActorRotation(),
+							LookAtRotation, Agent->AgentProperties.LookAtRotationRate
 						);
 
 						// FHitResult Hit; // TODO: Perhaps can get rid of the simgple floor/step check thanks to this 
@@ -291,15 +285,12 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						// of function calls, along with extra GetActorLocation() function calls
 						// when we already have the agents location in this scope, before we finally get to this function
 						// so we're directly calling it here instead of SetActorLocation() / SetActorRotation()
-						Agent.AgentClient->GetRootComponent()->MoveComponent(
+						Agent->AgentClient->GetRootComponent()->MoveComponent(
 							MoveDelta, LerpRotation, true);
 					}
 					
-					Agent.MoveTask.Reset();
+					Agent->MoveTask.Reset();
 				}
-				
-				/** Update the agent in the map to apply the changes we've made this tick */ // TODO: Don't need to copy the whole thing, just the task changes
-				AgentMap[Guid] = Agent;
 			}
 		}
 	}
@@ -442,6 +433,8 @@ void ANAIAgentManager::OnStepCheckTraceComplete(const FTraceHandle& Handle, FTra
 	UpdateAgentStepCheckResult(Guid, HighestVector, true);
 }
 
+#define ENABLE_LOCAL_BOUNDS_DEBUG true
+
 void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data, FGuid Guid)
 {
 	if(!Handle.IsValid())
@@ -453,21 +446,26 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	 */
 	if(Data.OutHits.Num() == 0)
 	{
-		UpdateAgentLocalBoundsCheckResult(Guid, FAgentLocalBoundsCheckResult());
+		AgentMap[Guid].UpdateLocalBoundsCheckResult(FAgentLocalBoundsCheckResult());
 		return;
 	}
-
+	
 	/** Handle Singular Hit output */
 	if(Data.OutHits.Num() == 1)
 	{
-		UpdateAgentLocalBoundsCheckResult(Guid, FAgentLocalBoundsCheckResult(true, Data.OutHits.Last().ImpactPoint));
+		AgentMap[Guid].UpdateLocalBoundsCheckResult(
+			FAgentLocalBoundsCheckResult(true, Data.OutHits.Last().ImpactPoint)
+		);
+		
 		return;
 	}
 
 	/** IF we got here it means we have multiple hits. */
 
+
+
 	
-#if (ENABLE_DEBUG_PRINT_SCREEN)
+#if (ENABLE_LOCAL_BOUNDS_DEBUG)
 	if(GEngine)
 	{
 		const uint8 Result = CheckIfBlockedByAgent(Data.OutHits, Guid);
@@ -481,27 +479,25 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 #endif
 
 	FVector HighestVector = FVector::ZeroVector;
-	for(const FHitResult& Hit : Data.OutHits)
-	{
-		if(Hit.ImpactPoint.Z > HighestVector.Z)
-		{
-			HighestVector = Hit.ImpactPoint;
-		}
-	}
-	
+	FNAICalculator::GetHighestHitPoint(Data.OutHits, HighestVector);
+
+#if (ENABLE_LOCAL_BOUNDS_DEBUG)
 	if(GEngine)
 	{
+		// Print the highest vector to screen as a string
 		GEngine->AddOnScreenDebugMessage(
 			-1, 1.0f, FColor::Yellow,
-			FString::Printf(TEXT("Hit Name: %s"),
+			FString::Printf(TEXT("Highest Vector Hit: %s"),
 			*HighestVector.ToString())
 		);
 
+		// Draw a small capsule at the location of the highest vector
 		UKismetSystemLibrary::DrawDebugCapsule(WorldRef, HighestVector,
 	5.0f, 5.0f,
 	FRotator(0.0f), FLinearColor(255, 0, 150), 5.0f, 1.0f
 		);
 	}
+#endif
 }
 
 bool ANAIAgentManager::CheckIfBlockedByAgent(const TArray<FHitResult>& Objects, const FGuid& Guid) const
