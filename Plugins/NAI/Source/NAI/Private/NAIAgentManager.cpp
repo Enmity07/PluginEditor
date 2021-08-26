@@ -91,7 +91,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				const FGuid Guid = AgentGuids[i];
 				/**
 				 * Grab a reference to the Agent we want to work on.
-				 * We don't take a copy to avoid having to re-box it after
+				 * We don't take a copy to avoid having to unbox it after
 				 */
 				FAgent *Agent = &AgentMap[Guid];
 
@@ -440,18 +440,25 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(!Handle.IsValid())
 		return;
 
+	const int HitResultCount = Data.OutHits.Num();
+	
 	/**
-	 * We didn't hit anything at all... this means we're in the air...
+	 * We didn't hit anything at all... this means we're in mid-air...
 	 * Reset the result with the type's default constructor
 	 */
-	if(Data.OutHits.Num() == 0)
+	if(HitResultCount == 0)
 	{
-		AgentMap[Guid].UpdateLocalBoundsCheckResult(FAgentLocalBoundsCheckResult());
+		AgentMap[Guid].UpdateLocalBoundsCheckResult(/* Default */);
 		return;
 	}
 	
-	/** Handle Singular Hit output */
-	if(Data.OutHits.Num() == 1)
+	/** 
+	 * Handle Singular Hit output
+	 * We pass the only impact point as the highest vector since there are no others
+	 * This can be either the floor height, or the location of an object the agent collided with
+	 * in mid-air
+	 */
+	if(HitResultCount == 1)
 	{
 		AgentMap[Guid].UpdateLocalBoundsCheckResult(
 			FAgentLocalBoundsCheckResult(true, Data.OutHits.Last().ImpactPoint)
@@ -461,26 +468,20 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	}
 
 	/** IF we got here it means we have multiple hits. */
-
-
-
 	
-#if (ENABLE_LOCAL_BOUNDS_DEBUG)
-	if(GEngine)
-	{
-		const uint8 Result = CheckIfBlockedByAgent(Data.OutHits, Guid);
-	
-		GEngine->AddOnScreenDebugMessage(
-			-1, 1.0f, FColor::Yellow,
-			FString::Printf(TEXT("Is Registering Self: %d"),
-			Result)
-		);
-	}
-#endif
-
 	FVector HighestVector = FVector::ZeroVector;
 	FNAICalculator::GetHighestHitPoint(Data.OutHits, HighestVector);
+	
+	TArray<FVector> HitPoints;
+	for(int i = 0; i < HitResultCount; i++)
+	{
+		HitPoints.Add(Data.OutHits[i].ImpactPoint);
+	}
+	AgentMap[Guid].UpdateLocalBoundsCheckResult(
+		FAgentLocalBoundsCheckResult(true, HighestVector, true, HitPoints)
+	);
 
+	
 #if (ENABLE_LOCAL_BOUNDS_DEBUG)
 	if(GEngine)
 	{
