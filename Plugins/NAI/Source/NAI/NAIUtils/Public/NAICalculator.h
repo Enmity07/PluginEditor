@@ -30,6 +30,7 @@ public:
 		// N  = N * (ThreeHalves - (Half * N * N));	// 2nd iteration, this can be removed ..
 	
 		return N * InNumber;
+		// ty id <3
 	}
 
 	static FORCEINLINE void GetHighestHitPoint(const TArray<FHitResult>& Hits, FVector& OutHighestHit)

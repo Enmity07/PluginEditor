@@ -282,7 +282,7 @@ public:
 		const uint8 InIsValid = false,
 		const FVector& InHighestHit = FVector::ZeroVector,
 		const uint8 InHasMultipleHits = false,
-		const TArray<FVector> InHitPoints = TArray<FVector>())
+		const TArray<FVector>& InHitPoints = TArray<FVector>())
 	:
 		FAgentResultBase(InIsValid),
 		HighestHitPoint(InHighestHit),
@@ -588,7 +588,7 @@ public:
 	}
 
 	FORCEINLINE void UpdateLocalBoundsCheckResult(
-		const FAgentLocalBoundsCheckResult& InResult)
+		const FAgentLocalBoundsCheckResult& InResult = FAgentLocalBoundsCheckResult())
 	{
 		LocalBoundsCheckTask.SetResult(InResult);
 	}
