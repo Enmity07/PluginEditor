@@ -211,18 +211,19 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 
 				if(Agent->LocalBoundsCheckTask.IsReady())
 				{
-					const FVector StartPoint = AgentLocation + FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
-					const FVector EndPoint = AgentLocation - FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
+					// const FVector StartPoint = AgentLocation + FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
+					const FVector EndPoint = AgentLocation - FVector(0.0f, 0.0f, (CapsuleSweepProperties.HalfHeight * 2.0f));
 					
 					WorldRef->AsyncSweepByObjectType(
-						EAsyncTraceType::Multi, StartPoint, EndPoint, ZERO_QUAT,
+						EAsyncTraceType::Multi, AgentLocation, EndPoint, ZERO_QUAT,
 						ObjectQueryParams,
 						CapsuleSweepProperties.VirtualCapsule,
 						FCollisionQueryParams::DefaultQueryParam,
 						&Agent->LocalBoundsCheckTask.GetOnCompleteDelegate()
 					);
 
-					UKismetSystemLibrary::DrawDebugCapsule(WorldRef, AgentLocation,
+					const FVector DebugLocation = AgentLocation - FVector(0.0f, 0.0f, CapsuleSweepProperties.HalfHeight);
+					UKismetSystemLibrary::DrawDebugCapsule(WorldRef, DebugLocation,
 					CapsuleSweepProperties.HalfHeight, CapsuleSweepProperties.Radius,
 						FRotator(0.0f), FLinearColor(0, 100, 255), 2.0f, 1.0f
 					);
@@ -249,6 +250,21 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						const FVector Direction = (End - Start).GetSafeNormal();
 
 						FVector NewLoc = (AgentLocation + (Direction * (Agent->AgentProperties.MoveSpeed * DeltaTime)));
+
+
+						if(Agent->LocalBoundsCheckTask.GetResult().bIsValidResult)
+						{
+							const float NewZ = (Agent->LocalBoundsCheckTask.GetResult().GetHighestHitPoint().Z +
+								(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)
+							);
+
+							NewLoc.Z = NewZ;
+						}
+						else
+						{
+							// Try get height of ground with the simple checks
+						}
+
 						
 						/** 
 						 * We need to check the step before the floor, since if there is a step
@@ -256,16 +272,16 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						 * then we can just use the floor height.
 						 * TODO: This can be better..
 						 */
-						if(Agent->StepCheckTask.GetResult().bIsValidResult)
-						{
-							NewLoc.Z = (Agent->StepCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
-						}
-						else if(Agent->FloorCheckTask.GetResult().bIsValidResult)
-						{			
-							NewLoc.Z = (Agent->FloorCheckTask.GetResult().DetectedHitLocation.Z +
-								(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
-						}
+						//if(Agent->StepCheckTask.GetResult().bIsValidResult)
+						//{
+						//	NewLoc.Z = (Agent->StepCheckTask.GetResult().DetectedHitLocation.Z +
+						//		(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+						//}
+						//else if(Agent->FloorCheckTask.GetResult().bIsValidResult)
+						//{			
+						//	NewLoc.Z = (Agent->FloorCheckTask.GetResult().DetectedHitLocation.Z +
+						//		(Agent->AgentProperties.CapsuleHalfHeight + 1.0f)); // an offset is applied to avoid the agent getting stuck on the floor
+						//}
 
 						// Calculate the difference in movement
 						// This difference calc is also done inside the FindLookAtRotation function below,
@@ -468,15 +484,18 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	}
 
 	/** IF we got here it means we have multiple hits. */
-	
+
+	// Get the highest vector from the list of hits
 	FVector HighestVector = FVector::ZeroVector;
 	FNAICalculator::GetHighestHitPoint(Data.OutHits, HighestVector);
-	
+
+	// assemble a list of vectors representing the hit locations
 	TArray<FVector> HitPoints;
 	for(int i = 0; i < HitResultCount; i++)
 	{
 		HitPoints.Add(Data.OutHits[i].ImpactPoint);
 	}
+	// Update the result
 	AgentMap[Guid].UpdateLocalBoundsCheckResult(
 		FAgentLocalBoundsCheckResult(true, HighestVector, true, HitPoints)
 	);
