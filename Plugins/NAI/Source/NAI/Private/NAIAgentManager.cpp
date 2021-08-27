@@ -205,7 +205,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						&Agent->StepCheckTask.GetOnCompleteDelegate()
 					);
 				}
-
+				
 				const FAgentVirtualCapsuleSweepProperties CapsuleSweepProperties
 					= Agent->AgentProperties.NavigationProperties.LocalBoundsCheckProperties; 
 
