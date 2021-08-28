@@ -22,5 +22,22 @@ protected:
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
+	
+	void OnLineTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	int LineTracesPerTick;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	int LineTraceLength;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	int ObjectSweepsPerTick;
+
+private:
+	UPROPERTY()
+	class UWorld *WorldRef;
+	
+	UPROPERTY()
+	FTraceDelegate LineTraceCompleteDelegate;
 };
