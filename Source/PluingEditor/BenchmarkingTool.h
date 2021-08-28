@@ -32,6 +32,9 @@ public:
 	float LineTraceLength;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	uint8 bMultiLineTraces : 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
 	int ObjectSweepsPerTick;
 
 private:
@@ -39,4 +42,6 @@ private:
 	class UWorld *WorldRef;
 	
 	FTraceDelegate LineTraceCompleteDelegate;
+
+	EAsyncTraceType	AsyncTraceType;
 };

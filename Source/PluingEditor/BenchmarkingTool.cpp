@@ -8,6 +8,8 @@ ABenchmarkingTool::ABenchmarkingTool()
 	LineTracesPerTick = 100;
 	LineTraceLength = 100.0f;
 	ObjectSweepsPerTick = 100;
+	bMultiLineTraces = false;
+	AsyncTraceType = EAsyncTraceType::Single;
 
 	WorldRef = nullptr;
 	
@@ -23,6 +25,11 @@ void ABenchmarkingTool::BeginPlay()
 	WorldRef = GetWorld();
 	
 	LineTraceCompleteDelegate.BindUObject(this, &ABenchmarkingTool::OnLineTraceComplete);
+
+	if(bMultiLineTraces)
+	{
+		AsyncTraceType = EAsyncTraceType::Multi;
+	}
 }
 
 // Called every frame
@@ -37,7 +44,7 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 		(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
 
 	const FVector InitialPoint = FVector::ZeroVector;
-	const FVector Gap = FVector(5.0f, 0.0f, 0.0f);
+	const FVector Gap = FVector(1.0f, 0.0f, 0.0f);
 	
 	for(int i = 0; i < LineTracesPerTick; i++)
 	{
@@ -45,7 +52,7 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 		const FVector EndPoint = StartPoint + FVector(0.0f, 0.0f, LineTraceLength);
 
 		WorldRef->AsyncLineTraceByObjectType(
-			EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
+			AsyncTraceType, StartPoint, EndPoint, ObjectQueryParams,
 			FCollisionQueryParams::DefaultQueryParam,
 			&LineTraceCompleteDelegate
 		);
