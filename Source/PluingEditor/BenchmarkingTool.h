@@ -29,7 +29,7 @@ public:
 	int LineTracesPerTick;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
-	int LineTraceLength;
+	float LineTraceLength;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
 	int ObjectSweepsPerTick;
@@ -38,6 +38,5 @@ private:
 	UPROPERTY()
 	class UWorld *WorldRef;
 	
-	UPROPERTY()
 	FTraceDelegate LineTraceCompleteDelegate;
 };

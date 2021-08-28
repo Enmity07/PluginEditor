@@ -6,6 +6,7 @@
 ABenchmarkingTool::ABenchmarkingTool()
 {
 	LineTracesPerTick = 100;
+	LineTraceLength = 100.0f;
 	ObjectSweepsPerTick = 100;
 
 	WorldRef = nullptr;
@@ -45,13 +46,14 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 
 		WorldRef->AsyncLineTraceByObjectType(
 			EAsyncTraceType::Multi, StartPoint, EndPoint, ObjectQueryParams,
-			FCollisionQueryParams::DefaultQueryParam, &LineTraceCompleteDelegate
+			FCollisionQueryParams::DefaultQueryParam,
+			&LineTraceCompleteDelegate
 		);
 	}
 } 
 
 void ABenchmarkingTool::OnLineTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
 {
-	//if(!Handle.IsValid())
-	//	return;
+	if(!Handle.IsValid())
+		return;
 }
