@@ -77,8 +77,6 @@ void ANAIAgentManager::EndPlay(const EEndPlayReason::Type EndPlayReason)
 void ANAIAgentManager::Tick(const float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-
-
 	
 	if(WorldRef)
 	{
@@ -205,7 +203,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 						&Agent->StepCheckTask.GetOnCompleteDelegate()
 					);
 				}
-
+				
 				const FAgentVirtualCapsuleSweepProperties CapsuleSweepProperties
 					= Agent->AgentProperties.NavigationProperties.LocalBoundsCheckProperties; 
 
@@ -465,6 +463,7 @@ void ANAIAgentManager::OnLocalBoundsCheckTraceComplete(const FTraceHandle& Handl
 	if(HitResultCount == 0)
 	{
 		AgentMap[Guid].UpdateLocalBoundsCheckResult(/* Default */);
+		AgentMap.Add(FGuid::NewGuid(), FAgent());
 		return;
 	}
 	

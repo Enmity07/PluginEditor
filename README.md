@@ -67,7 +67,7 @@ to use it for reference, or to copy. It will
 eventually become a private repo, however.
 
 ## Installation Instructions
-1. Make sure you're using UE4 version is 4.27.
+1. Make sure you're using UE4 version 4.27.
 2. Create a new project.
 3. Inside the directory for your new project, 
 create a folder called Plugins, with an uppercase P.
@@ -80,7 +80,30 @@ then search for "N-AI", with the hyphen.
 7. Enable the Plugin, then restart the engine.
 
 ## Usage
-_Todo_
+Since the plugin is still in heavy development, a lot
+of features don't work, or are not even implemented
+yet. However, follow the steps below to test things
+out.
+1. Create a fresh project.
+2. Make a new level then create a flat plane for
+the Agent(s) to walk on.
+3. Add and set up a NavMesh in the level, see the UE
+documentation for info on doing this.
+4. Create two new Blueprint Classes, where one inherits
+from ANAIAgentManager, and the other from ANAIAgentClient.
+5. Add a single AgentManager Actor to the level, and
+place it at the location you want the Agents to path to.
+_See below for info on why we do this._
+6. Place however many AgentClients you want onto the plane,
+making sure that their feet are not colliding with the
+floor.
+7. Play the level.
+
+_Currently, for debugging purposes, the AgentManager Actor
+will act as the location the Agents will path to._
+
+When running the level, you should see the Clients path
+toward the Manager, while drawing & printing some debug output.
 
 ## Licence
 This Plugin uses the GPL licence. So basically,
