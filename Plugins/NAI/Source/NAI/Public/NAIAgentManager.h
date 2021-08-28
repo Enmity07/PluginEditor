@@ -92,6 +92,7 @@ struct NAI_API FAgentSimpleTask
 private:
 	FAgentTimedProperty TaskTimer;
 public:
+	/** Initialize the task with a tick rate. */
 	virtual FORCEINLINE void InitializeTask(const float InTickRate)
 	{
 		TaskTimer.TickRate = InTickRate;
@@ -125,8 +126,8 @@ struct NAI_API TAgentResultContainer
 	 * to figure out if the result is too old. */
 	FAgentTimedProperty Age;
 
-	TAgentResultContainer()
-		: Lifespan(0.0f), bIsDirty(false)
+	TAgentResultContainer()	: Lifespan(0.0f),
+		bIsDirty(false)
 	{ }
 };
 
@@ -138,7 +139,13 @@ private:
 	TDelegateType OnCompleteDelegate;
 	
 public:
-	virtual FORCEINLINE void InitializeTask(const float InTickRate)
+	/**
+	 * Initialize the task with a tick rate.
+	 * We also set the lifespan to be equal to the tick rate.
+	 * This is because we don't want to use a result that has lived
+	 * for longer than one whole tick.
+	 */
+	virtual FORCEINLINE void InitializeTask(const float InTickRate) override
 	{
 		FAgentSimpleTask::InitializeTask(InTickRate);
 		ResultContainer.Lifespan = InTickRate;
@@ -230,7 +237,8 @@ struct NAI_API TAgentMultiTask
 struct NAI_API FAgentResultBase
 {
 	uint8 bIsValidResult : 1;
-	
+
+	/** Handle default initialization. */
 	FAgentResultBase()
 		: bIsValidResult(false)
 	{ }
@@ -256,12 +264,11 @@ struct NAI_API FAgentTraceResult : FAgentResultBase
 	/** Vector that represents  the hit location if we hit one */
 	FVector DetectedHitLocation;
 
-	FAgentTraceResult()
-		: DetectedHitLocation(FVector())
+	/** Handle default initialization. */
+	FAgentTraceResult() : DetectedHitLocation(FVector())
 	{ }
 	
-	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation)
-		: FAgentResultBase(InIsValid),
+	FAgentTraceResult(const uint8 InIsValid, const FVector& InLocation) : FAgentResultBase(InIsValid),
 		DetectedHitLocation(InLocation)
 	{ }
 	
@@ -278,6 +285,7 @@ private:
 	uint8 bHasMultipleHits : 1;
 	TArray<FVector> HitPoints;
 public:
+	/** Handle default initialization. */
 	FAgentLocalBoundsCheckResult(
 		const uint8 InIsValid = false,
 		const FVector& InHighestHit = FVector::ZeroVector,
@@ -335,6 +343,25 @@ struct NAI_API FAgentAvoidanceProperties
 	FVector StartOffsetHeightVector;
 	FVector SideStartOffsetHeightVector;
 
+	/** Handle default initialization. */
+	FAgentAvoidanceProperties() : AvoidanceLevel(EAgentAvoidanceLevel::Advanced),
+		GridWidth(0.0f),
+		GridHalfWidth(0.0f),
+		GridHeight(0.0f),
+		GridHalfHeight(0.0f),
+		GridColumns(0),
+		GridRows(0),
+		SideColumns(0),
+		SideRows(0),
+		WidthIncrementSize(0.0f),
+		SideWidthIncrementSize(0.0f),
+		HeightIncrementSize(0.0f),
+		StartOffsetWidth(0.0f),
+		SideStartOffsetWidth(0.0f),
+		StartOffsetHeightVector(FVector::ZeroVector),
+		SideStartOffsetHeightVector(FVector::ZeroVector)
+	{ }
+
 	/**
 	 * TODO: Document this
 	 * @brief Calculates and sets up the Avoidance grid of traces.
@@ -387,8 +414,9 @@ struct NAI_API FAgentVirtualCapsuleSweepProperties
 
 	FCollisionShape VirtualCapsule;
 
-	FAgentVirtualCapsuleSweepProperties()
-		: Radius(0), HalfHeight(0)
+	/** Handle default initialization. */
+	FAgentVirtualCapsuleSweepProperties() : Radius(0.0f),
+		HalfHeight(0.0f)
 	{ }
 
 	FORCEINLINE void InitializeOrUpdate(
@@ -406,7 +434,12 @@ struct NAI_API FAgentStepCheckProperties
 {
 	float ForwardOffset;
 	float DownwardOffset;
-	
+
+	/** Handle default initialization. */
+	FAgentStepCheckProperties() : ForwardOffset(0.0f),
+		DownwardOffset(0.0f)
+	{ }
+
 	FORCEINLINE void Initialize(
 		const float InRadius,
 		const float InHalfHeight,
@@ -425,6 +458,12 @@ struct NAI_API FAgentNavigationProperties
 	
 	/** Sub-structure containing the Agent's Step Navigation properties. */
 	FAgentStepCheckProperties StepProperties;
+
+	/** Handle default initialization. */
+	FAgentNavigationProperties() : NavAgentProperties(FNavAgentProperties()),
+		LocalBoundsCheckProperties(FAgentVirtualCapsuleSweepProperties()),
+		StepProperties(FAgentStepCheckProperties())
+	{ }
 };
 
 struct NAI_API FAgentProperties
@@ -447,6 +486,17 @@ struct NAI_API FAgentProperties
 	FAgentNavigationProperties NavigationProperties;
 	/** Sub-structure containing the Agent's Avoidance properties. */
 	FAgentAvoidanceProperties AvoidanceProperties;
+
+	/** Handle default initialization. */
+	FAgentProperties() : AgentType(EAgentType::PathToPlayer),
+		CapsuleRadius(0.0f),
+		CapsuleHalfHeight(0.0f),
+		MoveSpeed(0.0f),
+		LookAtRotationRate(0.0f),
+		MaxStepHeight(0.0f),
+		NavigationProperties(FAgentNavigationProperties()),
+		AvoidanceProperties(FAgentAvoidanceProperties())
+	{ }
 };
 
 class AAgentManager;
@@ -464,8 +514,6 @@ USTRUCT()
 struct NAI_API FAgent
 {
 	GENERATED_BODY()
-
-	FVector SegmentDirection;
 	
 	/**
 	 * A copy of the Guid for this Agent.
@@ -487,16 +535,17 @@ struct NAI_API FAgent
 	 * the Agent's tasks.
 	 */
 	FAgentProperties AgentProperties;
-	
+
+	/** Agent Tasks */
 	TAgentTask<FAgentPathResult, FNavPathQueryDelegate> PathTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceFrontTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceRightTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> AvoidanceLeftTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> FloorCheckTask;
 	TAgentTask<FAgentTraceResult, FTraceDelegate> StepCheckTask;
-
 	TAgentTask<FAgentLocalBoundsCheckResult, FTraceDelegate> LocalBoundsCheckTask;
 
+	/** Simple Tasks. These don't have a result output. */
 	FAgentSimpleTask MoveTask;
 
 	// Local copy of the agents current velocity Vector
@@ -506,16 +555,27 @@ private:
 	FVector PositionThisFrame;
 	FVector PositionLastFrame;
 	
-public:
 	/**
-	 * Whether or not this agent is halted. If the Agent is halted,
-	 * it will still have it's Timers and Velocity updated.
-	 */
+	* Whether or not this agent is halted. If the Agent is halted,
+	* it will still have it's Timers and Velocity updated.
+	*/
 	uint8 bIsHalted : 1;
+	
+public:
+	/** Handle default initialization. */
+	FAgent() : AgentClient(nullptr),
+		AgentManager(nullptr),
+		AgentProperties(FAgentProperties()),
+		Speed(0.0f),
+		bIsHalted(false)
+	{ }
 
 	/** Set the Velocity of this Agent. */
 	FORCEINLINE void SetVelocity(const FVector& InVelocity) { Velocity = InVelocity; }
 
+	/** Get whether or not the Agent is halted. */
+	FORCEINLINE bool IsHalted() { return bIsHalted; }
+	
 	/** Set the Agent either be halted, or not. */
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
@@ -879,7 +939,9 @@ private:
 		const FVector& PlayerLocation) const;
 	
 	/**
-	 * TODO: Document this 
+	 * Initialize all the pointers we need.
+	 * This includes things like the UWorld ref and
+	 * the Nav System.. etc...
 	 */
 	void Initialize();
 	
@@ -912,15 +974,29 @@ private:
 	TArray<FGuid> AgentGuids;
 };
 
-/** TODO: Sort this out */
+/**
+ * Static utility class used to get a reference to the
+ * active AgentManager, if one exists.
+ * @note ONLY USE THIS AT RUNTIME
+ * @param bManagerExists This will be true is a manager is active.
+ * @param CurrentManager A pointer to the current manager.
+ */
 class UAgentManagerStatics
 {
 public:
+	/** Variable used to check the if a manager reference exists. */
 	static bool bManagerExists;
-	
+
+	/** Function used to set the CurrentManager pointer. */
 	static void SetManagerReference(ANAIAgentManager* InManager);
+
+	/** Return a reference to the current manager. */
 	static ANAIAgentManager* GetManagerReference();
+
+	/** Reset the class, remove the reference to the manager. */
 	static void Reset();
+
 private:
+	/** Pointer to the current manager. */
 	static ANAIAgentManager* CurrentManager;
 };

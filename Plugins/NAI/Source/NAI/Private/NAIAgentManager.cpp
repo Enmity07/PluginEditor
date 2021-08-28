@@ -101,7 +101,7 @@ void ANAIAgentManager::Tick(const float DeltaTime)
 				Agent->CalculateAndUpdateSpeed(AgentLocation, DeltaTime);
 
 				// If the Agent has been set to stop, don't do anything
-		        if(Agent->bIsHalted)
+		        if(Agent->IsHalted())
 		        {
 		            continue;
 		        }
