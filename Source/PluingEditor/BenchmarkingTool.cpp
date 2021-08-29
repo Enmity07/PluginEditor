@@ -5,12 +5,22 @@
 // Sets default values
 ABenchmarkingTool::ABenchmarkingTool()
 {
+	bDoLineTraceBenchmarks = false;
+	bDoObjectSweepTraceBenchmarks = false;
+	
 	LineTracesPerTick = 100;
 	LineTraceLength = 100.0f;
-	ObjectSweepsPerTick = 100;
 	bMultiLineTraces = false;
 	bLineTraceDelegateOutput = false;
-	AsyncTraceType = EAsyncTraceType::Single;
+	AsyncLineTraceType = EAsyncTraceType::Single;
+	
+	ObjectSweepsPerTick = 100;
+	ObjectSweepsTraceLength = 100.0f;
+	ObjectSweepsTraceRadius = 50.0f;
+	ObjectSweepsTraceHalfHeight = 96.0f;
+	bMultiObjectSweepTraces = false;
+	bObjectSweepTraceDelegateOutput = false;
+	AsyncObjectSweepsTraceType = EAsyncTraceType::Single;
 
 	WorldRef = nullptr;
 	
@@ -26,11 +36,19 @@ void ABenchmarkingTool::BeginPlay()
 	WorldRef = GetWorld();
 	
 	LineTraceCompleteDelegate.BindUObject(this, &ABenchmarkingTool::OnLineTraceComplete);
+	ObjectSweepsTraceCompleteDelegate.BindUObject(this, &ABenchmarkingTool::OnObjectSweepTraceComplete);
 
 	if(bMultiLineTraces)
 	{
-		AsyncTraceType = EAsyncTraceType::Multi;
+		AsyncLineTraceType = EAsyncTraceType::Multi;
 	}
+	
+	if(bMultiObjectSweepTraces)
+	{
+		AsyncObjectSweepsTraceType = EAsyncTraceType::Multi;
+	}
+
+	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
 }
 
 // Called every frame
@@ -45,22 +63,48 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 		(ECC_TO_BITFIELD(ECC_WorldStatic) | ECC_TO_BITFIELD(ECC_WorldDynamic));
 
 	const FVector InitialPoint = FVector::ZeroVector;
-	const FVector Gap = FVector(0.1f, 0.0f, 0.0f);
-	
-	for(int i = 0; i < LineTracesPerTick; i++)
-	{
-		const FVector StartPoint = InitialPoint + (Gap * i);
-		const FVector EndPoint = StartPoint + FVector(0.0f, 0.0f, LineTraceLength);
+	const FVector KindaSmallGap = FVector(KINDA_SMALL_NUMBER, 0.0f, 0.0f);
 
-		WorldRef->AsyncLineTraceByObjectType(
-			AsyncTraceType, StartPoint, EndPoint, ObjectQueryParams,
-			FCollisionQueryParams::DefaultQueryParam,
-			bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : nullptr
-		);
+	if(bDoLineTraceBenchmarks)
+	{
+		for(int i = 0; i < LineTracesPerTick; i++)
+		{
+			const FVector StartPoint = InitialPoint + (KindaSmallGap * i);
+			const FVector EndPoint = StartPoint + FVector(0.0f, 0.0f, LineTraceLength);
+
+			WorldRef->AsyncLineTraceByObjectType(
+				AsyncLineTraceType, StartPoint, EndPoint, ObjectQueryParams,
+				FCollisionQueryParams::DefaultQueryParam,
+				bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : 0
+			);
+		}
+	}
+
+	if(bDoObjectSweepTraceBenchmarks)
+	{
+		for(int i = 0; i < ObjectSweepsPerTick; i++)
+		{
+			const FVector StartPoint = InitialPoint + (KindaSmallGap * i);
+			const FVector EndPoint = StartPoint + FVector(0.0f, 0.0f, ObjectSweepsTraceLength);
+		
+			WorldRef->AsyncSweepByObjectType(
+				AsyncObjectSweepsTraceType, StartPoint, EndPoint, FQuat(0.0f, 0.0f, 0.0f, 0.0f),
+				ObjectQueryParams,
+				VirtualCapsule,
+				FCollisionQueryParams::DefaultQueryParam,
+				bObjectSweepTraceDelegateOutput ? &ObjectSweepsTraceCompleteDelegate : 0
+			);
+		}
 	}
 } 
 
 void ABenchmarkingTool::OnLineTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
+{
+	if(!Handle.IsValid())
+		return;
+}
+
+void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data)
 {
 	if(!Handle.IsValid())
 		return;

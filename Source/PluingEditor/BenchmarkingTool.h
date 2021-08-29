@@ -24,27 +24,55 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	
 	void OnLineTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
+	void OnObjectSweepTraceComplete(const FTraceHandle& Handle, FTraceDatum& Data);
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	uint8 bDoLineTraceBenchmarks : 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	uint8 bDoObjectSweepTraceBenchmarks : 1;
+	
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|LineTraces")
 	int LineTracesPerTick;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|LineTraces")
 	float LineTraceLength;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|LineTraces")
 	uint8 bMultiLineTraces : 1;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|LineTraces")
 	uint8 bLineTraceDelegateOutput : 1;
+
 	
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
 	int ObjectSweepsPerTick;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
+	float ObjectSweepsTraceRadius;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
+	float ObjectSweepsTraceHalfHeight;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
+	float ObjectSweepsTraceLength;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
+	uint8 bMultiObjectSweepTraces : 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "BenchmarkSettings|ObjectSweeps")
+	uint8 bObjectSweepTraceDelegateOutput : 1;
 
 private:
 	UPROPERTY()
 	class UWorld *WorldRef;
 	
 	FTraceDelegate LineTraceCompleteDelegate;
+	FTraceDelegate ObjectSweepsTraceCompleteDelegate;
 
-	EAsyncTraceType	AsyncTraceType;
+	EAsyncTraceType	AsyncLineTraceType;
+	EAsyncTraceType	AsyncObjectSweepsTraceType;
+
+	FCollisionShape VirtualCapsule;
 };
