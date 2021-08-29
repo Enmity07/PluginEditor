@@ -35,6 +35,9 @@ public:
 	uint8 bMultiLineTraces : 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
+	uint8 bLineTraceDelegateOutput : 1;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = BenchmarkSettings)
 	int ObjectSweepsPerTick;
 
 private:
