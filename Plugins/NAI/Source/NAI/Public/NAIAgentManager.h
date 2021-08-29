@@ -103,7 +103,7 @@ public:
 		TaskTimer.AddTime(DeltaTime);
 	}
 	
-	FORCEINLINE void Reset() { TaskTimer.Reset(); }
+	virtual FORCEINLINE void Reset() { TaskTimer.Reset(); }
 	FORCEINLINE bool IsReady() const { return TaskTimer.bIsReady; }
 
 	virtual ~FAgentSimpleTask() { } // Need this
@@ -131,20 +131,21 @@ struct NAI_API TAgentResultContainer
 	{ }
 };
 
-template<typename TResultType, typename TDelegateType>
-struct NAI_API TAgentTask : FAgentSimpleTask
+/** Regular task type, holding a handle for access to result data. */
+template<typename TResultType>
+struct NAI_API TAgentTaskHandle : public FAgentSimpleTask
 {
 private:
 	TAgentResultContainer<TResultType> ResultContainer;
-	TDelegateType OnCompleteDelegate;
+	FTraceHandle TaskHandle;
 	
 public:
 	/**
-	 * Initialize the task with a tick rate.
-	 * We also set the lifespan to be equal to the tick rate.
-	 * This is because we don't want to use a result that has lived
-	 * for longer than one whole tick.
-	 */
+	* Initialize the task with a tick rate.
+	* We also set the lifespan to be equal to the tick rate.
+	* This is because we don't want to use a result that has lived
+	* for longer than one whole tick.
+	*/
 	virtual FORCEINLINE void InitializeTask(const float InTickRate) override
 	{
 		FAgentSimpleTask::InitializeTask(InTickRate);
@@ -156,22 +157,37 @@ public:
 		FAgentSimpleTask::IncrementTimers(DeltaTime);
 		ResultContainer.Age.AddTimeRaw(DeltaTime);
 	}
+
+	virtual FORCEINLINE void Reset() override
+	{
+		FAgentSimpleTask::Reset();
+		TaskHandle = FTraceHandle();
+	}
 	
 	FORCEINLINE const TResultType& GetResult() const { return ResultContainer.Result; }
-	
 	FORCEINLINE void SetResult(const TResultType& InResult)
 	{
 		ResultContainer.Result = InResult;
 		ResultContainer.Age.Reset();
 	}
+	
+	FORCEINLINE const FTraceHandle& GetTraceHandle() const { return TaskHandle; }
+	FORCEINLINE void SetTraceHandle(const FTraceHandle& InHandle) { TaskHandle = InHandle; }
+};
 
+/** Main task type, using a delegate for access to result data. */
+template<typename TResultType, typename TDelegateType>
+struct NAI_API TAgentTask : public TAgentTaskHandle<TResultType>
+{
+private:
+	TAgentResultContainer<TResultType> ResultContainer;
+	TDelegateType OnCompleteDelegate;
+	
+public:
 	FORCEINLINE TDelegateType& GetOnCompleteDelegate() { return OnCompleteDelegate; }
 };
 
-// delicate af type... sometimes it produces compile errors related to being
-// unable to access a function on a given task... even the resharper gains and loses
-// vision of the functions... even picking up a single element as the whole array
-// may need to typedef/using this in some capacity, to make the types less ambiguous.
+/** Not really using this yet, might keep it.. might not.. */
 template<typename TResultType, typename TDelegateType, uint8 TTaskCount = 1>
 struct NAI_API TAgentMultiTask
 {
@@ -576,7 +592,7 @@ public:
 	/** Get whether or not the Agent is halted. */
 	FORCEINLINE bool IsHalted() { return bIsHalted; }
 	
-	/** Set the Agent either be halted, or not. */
+	/** Set the Agent to either be halted, or not. */
 	FORCEINLINE void SetIsHalted(const uint8 IsHalted) { bIsHalted = IsHalted; }
 	
 	/** Update the Agents PathPoints for their current navigation path. */
