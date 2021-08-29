@@ -37,7 +37,6 @@ public:
 private:
 	UPROPERTY()
 	class UWorld *WorldRef;
-	
-	UPROPERTY()
+
 	FTraceDelegate LineTraceCompleteDelegate;
 };

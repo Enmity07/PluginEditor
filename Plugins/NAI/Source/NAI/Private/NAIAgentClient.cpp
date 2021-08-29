@@ -104,7 +104,7 @@ void ANAIAgentClient::BeginPlay()
 			Agent.AgentProperties.MaxStepHeight
 		);
 
-		Agent.bIsHalted = false;
+		Agent.SetIsHalted(false);
 
 		Agent.PathTask.GetOnCompleteDelegate().BindUObject(
 			AgentManager, &ANAIAgentManager::OnAsyncPathComplete, Guid
