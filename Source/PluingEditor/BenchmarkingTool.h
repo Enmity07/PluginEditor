@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <atomic>
+
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "BenchmarkingTool.generated.h"
@@ -75,4 +77,9 @@ private:
 	EAsyncTraceType	AsyncObjectSweepsTraceType;
 
 	FCollisionShape VirtualCapsule;
+
+private: // multithreading stuff
+	std::atomic<bool> bShouldTimerThreadRun;
+
+	void TimerThread();
 };

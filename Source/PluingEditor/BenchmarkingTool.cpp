@@ -2,9 +2,19 @@
 
 #include "BenchmarkingTool.h"
 
+#include <thread>
+
+#include <mutex>
+#include <chrono>
+
+#define GET load
+#define SET store
+
 // Sets default values
 ABenchmarkingTool::ABenchmarkingTool()
 {
+	bShouldTimerThreadRun.SET(false);
+	
 	bDoLineTraceBenchmarks = false;
 	bDoObjectSweepTraceBenchmarks = false;
 	
@@ -49,6 +59,11 @@ void ABenchmarkingTool::BeginPlay()
 	}
 
 	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
+
+	std::thread([=]()
+	{
+		bShouldTimerThreadRun.SET(false);
+	});
 }
 
 // Called every frame
@@ -65,6 +80,8 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 	const FVector InitialPoint = FVector::ZeroVector;
 	const FVector KindaSmallGap = FVector(KINDA_SMALL_NUMBER, 0.0f, 0.0f);
 
+	
+	
 	if(bDoLineTraceBenchmarks)
 	{
 		for(int i = 0; i < LineTracesPerTick; i++)
@@ -78,6 +95,7 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 				bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : 0
 			);
 		}
+		
 	}
 
 	if(bDoObjectSweepTraceBenchmarks)
@@ -108,4 +126,15 @@ void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, F
 {
 	if(!Handle.IsValid())
 		return;
+}
+
+void ABenchmarkingTool::TimerThread()
+{
+	for(;;) //infinite loop
+	{
+		if(bShouldTimerThreadRun.GET == false)
+			return;
+
+		std::this_thread::sleep_for(std::chrono::microseconds(100));
+	}
 }
