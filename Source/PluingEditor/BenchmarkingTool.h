@@ -2,80 +2,10 @@
 
 #pragma once
 
-#include <atomic>
-#include <mutex>
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "HAL/Thread.h"
 #include "BenchmarkingTool.generated.h"
-
-struct PLUINGEDITOR_API FThreadedTimer
-{
-	double Time;
-	std::atomic<bool> bHasFinished;
-
-	FThreadedTimer() : Time(0.0f)
-	{ }
-	FThreadedTimer(const double InTime) : Time(InTime)
-	{ }
-	~FThreadedTimer()
-	{ }
-
-	FORCEINLINE void SetTimeLowPriority(const double InValue)
-	{
-		LowPriorityLock();
-		Time = InValue;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void GetTimeHighPriority(double& Out)
-	{
-		HighPriorityLock();
-		Out = Time;
-		HighPriorityUnlock();
-	}
-
-	FORCEINLINE void AddTimeLowPriority()
-	{
-		LowPriorityLock();
-		Time += 0.0001f; // 100 microseconds
-		LowPriorityUnlock();
-	}
-	
-private:
-	FORCEINLINE void LowPriorityLock()
-	{
-		LowPriorityAccessLock.lock();
-        NextToAccessLock.lock();
-        DataAccessLock.lock();
-
-        NextToAccessLock.unlock();
-	}
-
-	FORCEINLINE void LowPriorityUnlock()
-	{
-		DataAccessLock.unlock();
-		LowPriorityAccessLock.unlock();
-	}
-	
-	FORCEINLINE void HighPriorityLock()
-	{
-		NextToAccessLock.lock();
-		DataAccessLock.lock();
-
-		NextToAccessLock.unlock();
-	}
-
-	FORCEINLINE void HighPriorityUnlock()
-	{
-		DataAccessLock.unlock();
-	}
-	
-	std::mutex DataAccessLock;
-	std::mutex NextToAccessLock;
-	std::mutex LowPriorityAccessLock;
-};
 
 UCLASS()
 class PLUINGEDITOR_API ABenchmarkingTool : public AActor
@@ -149,22 +79,4 @@ private:
 	EAsyncTraceType	AsyncObjectSweepsTraceType;
 
 	FCollisionShape VirtualCapsule;
-
-private: // multithreading stuff
-	std::atomic<bool> bShouldTimerThreadRun;
-	std::atomic<int> TimerThreadTickCount;
-
-	void TimerThread();
-
-	TArray<FGuid> TimerGuids;
-	TMap<FGuid, FThreadedTimer> TimerMap;
-
-	FORCEINLINE FGuid CreateNewTimer()
-	{
-		const FGuid NewGuid = FGuid::NewGuid();
-		const FThreadedTimer NewTimer;
-		TimerMap.Add(NewGuid, NewTimer);
-		TimerGuids.Add(NewGuid);
-		return NewGuid;
-	}
 };
