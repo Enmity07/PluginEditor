@@ -62,7 +62,8 @@ void ABenchmarkingTool::BeginPlay()
 
 	std::thread([=]()
 	{
-		bShouldTimerThreadRun.SET(false);
+		this->bShouldTimerThreadRun.SET(false);
+		this->TimerThread();
 	});
 }
 
@@ -130,11 +131,16 @@ void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, F
 
 void ABenchmarkingTool::TimerThread()
 {
+	unsigned long long TickCount = 0;
+	double LocalTicker = 0.00f;
+	
 	for(;;) //infinite loop
 	{
-		if(bShouldTimerThreadRun.GET == false)
+		if(bShouldTimerThreadRun.GET() == false)
 			return;
-
+		
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
+		LocalTicker += 0.0001f;
+		TickCount++;
 	}
 }

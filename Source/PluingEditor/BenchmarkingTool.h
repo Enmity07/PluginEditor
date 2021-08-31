@@ -3,10 +3,67 @@
 #pragma once
 
 #include <atomic>
+#include <mutex>
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "BenchmarkingTool.generated.h"
+
+enum class PLUINGEDITOR_API EAccessType : uint8
+{
+	GET,
+	SET
+};
+
+struct PLUINGEDITOR_API FThreadedTimer
+{
+	double Time;
+
+	struct FAccessData
+	{
+		double& TimeOutput;
+		double InTime; // doesn't need to be a ref/ptr
+	};
+	
+	FORCEINLINE void LowPriorityAccessor()
+	{
+		LowPriorityAccessLock.lock();
+		NextToAccessLock.lock();
+		DataAccessLock.lock();
+
+		NextToAccessLock.unlock();
+
+		// do stuff
+
+		DataAccessLock.unlock();
+		LowPriorityAccessLock.unlock();
+	}
+
+	FORCEINLINE void HighPriorityAccessor(
+		const EAccessType& AccessType, const FAccessData& AccessData)
+	{
+		NextToAccessLock.lock();
+		DataAccessLock.lock();
+
+		NextToAccessLock.unlock();
+
+		if(AccessType == EAccessType::GET)
+		{
+			AccessData.TimeOutput = Time;
+		}
+		else // SET
+		{
+			Time = AccessData.InTime;
+		}
+
+		DataAccessLock.unlock();
+	}
+
+private:
+	std::mutex DataAccessLock;
+	std::mutex NextToAccessLock;
+	std::mutex LowPriorityAccessLock;
+};
 
 UCLASS()
 class PLUINGEDITOR_API ABenchmarkingTool : public AActor
@@ -79,6 +136,8 @@ private:
 	FCollisionShape VirtualCapsule;
 
 private: // multithreading stuff
+
+	std::mutex TimerThreadLock;
 	std::atomic<bool> bShouldTimerThreadRun;
 
 	void TimerThread();
