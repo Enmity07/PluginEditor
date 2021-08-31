@@ -59,12 +59,21 @@ void ABenchmarkingTool::BeginPlay()
 	}
 
 	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
+	double TempTime = 0.0f;
 
+	Timers[0].GetTime(true, TempTime);
+	Timers[0].GetTime(true, TempTime);
+	
 	std::thread([=]()
 	{
 		this->bShouldTimerThreadRun.SET(false);
 		this->TimerThread();
 	});
+}
+
+void ABenchmarkingTool::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
 }
 
 // Called every frame

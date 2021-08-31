@@ -9,57 +9,104 @@
 #include "GameFramework/Actor.h"
 #include "BenchmarkingTool.generated.h"
 
-enum class PLUINGEDITOR_API EAccessType : uint8
-{
-	GET,
-	SET
-};
-
 struct PLUINGEDITOR_API FThreadedTimer
 {
 	double Time;
 
-	struct FAccessData
-	{
-		double& TimeOutput;
-		double InTime; // doesn't need to be a ref/ptr
-	};
+	FThreadedTimer() : Time(0.0f)
+	{ }
+	FThreadedTimer(const double InTime) : Time(InTime)
+	{ }
+	~FThreadedTimer()
+	{ }
 	
-	FORCEINLINE void LowPriorityAccessor()
+	FORCEINLINE void GetTime(const bool bHighPriority, double& Out)
 	{
-		LowPriorityAccessLock.lock();
-		NextToAccessLock.lock();
-		DataAccessLock.lock();
+		if(bHighPriority)
+		{
+			HighPriorityLock();
+			Out = Time;
+			HighPriorityUnlock();
+			return;
+		}
 
-		NextToAccessLock.unlock();
-
-		// do stuff
-
-		DataAccessLock.unlock();
-		LowPriorityAccessLock.unlock();
+		LowPriorityLock();
+		Out = Time;
+		LowPriorityUnlock();
 	}
 
-	FORCEINLINE void HighPriorityAccessor(
-		const EAccessType& AccessType, const FAccessData& AccessData)
+	FORCEINLINE void SetTime(const bool bHighPriority, const double InValue)
 	{
-		NextToAccessLock.lock();
-		DataAccessLock.lock();
-
-		NextToAccessLock.unlock();
-
-		if(AccessType == EAccessType::GET)
+		if(bHighPriority)
 		{
-			AccessData.TimeOutput = Time;
-		}
-		else // SET
-		{
-			Time = AccessData.InTime;
+			HighPriorityLock();
+			Time = InValue;
+			HighPriorityUnlock();
+			return;
 		}
 
-		DataAccessLock.unlock();
+		LowPriorityLock();
+		Time = InValue;
+		LowPriorityUnlock();
+	}
+	
+	FORCEINLINE void GetLowPriority(double& Out)
+	{
+		LowPriorityLock();
+		Out = Time;
+		LowPriorityUnlock();
+	}
+
+	FORCEINLINE void SetLowPriority(const double& InValue)
+	{
+		LowPriorityLock();
+		Time = InValue;
+		LowPriorityUnlock();
+	}
+
+	FORCEINLINE void GetHighPriority(double& Out)
+	{
+		HighPriorityLock();
+		Out = Time;
+		HighPriorityUnlock();
+	}
+
+	FORCEINLINE void SetHighPriority(const double& InValue)
+	{
+		HighPriorityLock();
+		Time = InValue;
+		HighPriorityUnlock();
 	}
 
 private:
+	FORCEINLINE void LowPriorityLock()
+	{
+		LowPriorityAccessLock.lock();
+        NextToAccessLock.lock();
+        DataAccessLock.lock();
+
+        NextToAccessLock.unlock();
+	}
+
+	FORCEINLINE void LowPriorityUnlock()
+	{
+		DataAccessLock.unlock();
+		LowPriorityAccessLock.unlock();
+	}
+	
+	FORCEINLINE void HighPriorityLock()
+	{
+		NextToAccessLock.lock();
+		DataAccessLock.lock();
+
+		NextToAccessLock.unlock();
+	}
+
+	FORCEINLINE void HighPriorityUnlock()
+	{
+		DataAccessLock.unlock();
+	}
+	
 	std::mutex DataAccessLock;
 	std::mutex NextToAccessLock;
 	std::mutex LowPriorityAccessLock;
@@ -78,6 +125,9 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	/** Called when the game end or when destroyed. */
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -141,4 +191,6 @@ private: // multithreading stuff
 	std::atomic<bool> bShouldTimerThreadRun;
 
 	void TimerThread();
+
+	TStaticArray<FThreadedTimer, 1024, 0> Timers;
 };
