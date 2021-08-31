@@ -59,11 +59,21 @@ void ABenchmarkingTool::BeginPlay()
 	}
 
 	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
+	double TempTime = 0.0f;
 
+	Timers[0].GetTime(true, TempTime);
+	Timers[0].GetTime(true, TempTime);
+	
 	std::thread([=]()
 	{
-		bShouldTimerThreadRun.SET(false);
+		this->bShouldTimerThreadRun.SET(false);
+		this->TimerThread();
 	});
+}
+
+void ABenchmarkingTool::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
 }
 
 // Called every frame
@@ -130,11 +140,16 @@ void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, F
 
 void ABenchmarkingTool::TimerThread()
 {
+	unsigned long long TickCount = 0;
+	double LocalTicker = 0.00f;
+	
 	for(;;) //infinite loop
 	{
-		if(bShouldTimerThreadRun.GET == false)
+		if(bShouldTimerThreadRun.GET() == false)
 			return;
-
+		
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
+		LocalTicker += 0.0001f;
+		TickCount++;
 	}
 }
