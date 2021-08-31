@@ -3,8 +3,6 @@
 #include "BenchmarkingTool.h"
 
 #include <thread>
-
-#include <mutex>
 #include <chrono>
 
 #define GET load
@@ -14,6 +12,7 @@
 ABenchmarkingTool::ABenchmarkingTool()
 {
 	bShouldTimerThreadRun.SET(false);
+	TimerThreadTickCount.SET(0);
 	
 	bDoLineTraceBenchmarks = false;
 	bDoObjectSweepTraceBenchmarks = false;
@@ -59,14 +58,10 @@ void ABenchmarkingTool::BeginPlay()
 	}
 
 	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
-	double TempTime = 0.0f;
-
-	Timers[0].GetTime(true, TempTime);
-	Timers[0].GetTime(true, TempTime);
 	
 	std::thread([=]()
 	{
-		this->bShouldTimerThreadRun.SET(false);
+		this->bShouldTimerThreadRun.SET(true);
 		this->TimerThread();
 	});
 }
@@ -74,6 +69,9 @@ void ABenchmarkingTool::BeginPlay()
 void ABenchmarkingTool::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
+
+	bShouldTimerThreadRun.SET(false);
+	std::this_thread::sleep_for(std::chrono::seconds(3)); // wait for thread to stop
 }
 
 // Called every frame
@@ -94,6 +92,8 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 	
 	if(bDoLineTraceBenchmarks)
 	{
+		const FGuid NewTimer = CreateNewTimer();
+		
 		for(int i = 0; i < LineTracesPerTick; i++)
 		{
 			const FVector StartPoint = InitialPoint + (KindaSmallGap * i);
@@ -105,7 +105,10 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 				bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : 0
 			);
 		}
-		
+
+		double TimerResult = 0.0f;
+		TimerMap[NewTimer].GetTimeHighPriority(TimerResult);
+		TimerMap[NewTimer].bHasFinished.SET(true);
 	}
 
 	if(bDoObjectSweepTraceBenchmarks)
@@ -140,16 +143,28 @@ void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, F
 
 void ABenchmarkingTool::TimerThread()
 {
-	unsigned long long TickCount = 0;
-	double LocalTicker = 0.00f;
+	TArray<FGuid> TimersWeKnowHaveFinished;
 	
 	for(;;) //infinite loop
 	{
 		if(bShouldTimerThreadRun.GET() == false)
 			return;
+
+		for(int i = 0; i < TimerThreadTickCount.GET(); i++)
+		{
+			if(TimersWeKnowHaveFinished.Contains(TimerGuids[i])) // skip if we know is finished
+				continue;
+			
+			if(!TimerMap[TimerGuids[i]].bHasFinished.GET())
+			{
+				TimerMap[TimerGuids[i]].AddTimeLowPriority();
+			}
+			else
+			{
+				TimersWeKnowHaveFinished.Add(TimerGuids[i]);
+			}
+		}
 		
 		std::this_thread::sleep_for(std::chrono::microseconds(100));
-		LocalTicker += 0.0001f;
-		TickCount++;
 	}
 }

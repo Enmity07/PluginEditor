@@ -7,11 +7,13 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "HAL/Thread.h"
 #include "BenchmarkingTool.generated.h"
 
 struct PLUINGEDITOR_API FThreadedTimer
 {
 	double Time;
+	std::atomic<bool> bHasFinished;
 
 	FThreadedTimer() : Time(0.0f)
 	{ }
@@ -19,65 +21,28 @@ struct PLUINGEDITOR_API FThreadedTimer
 	{ }
 	~FThreadedTimer()
 	{ }
-	
-	FORCEINLINE void GetTime(const bool bHighPriority, double& Out)
-	{
-		if(bHighPriority)
-		{
-			HighPriorityLock();
-			Out = Time;
-			HighPriorityUnlock();
-			return;
-		}
 
-		LowPriorityLock();
-		Out = Time;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void SetTime(const bool bHighPriority, const double InValue)
-	{
-		if(bHighPriority)
-		{
-			HighPriorityLock();
-			Time = InValue;
-			HighPriorityUnlock();
-			return;
-		}
-
-		LowPriorityLock();
-		Time = InValue;
-		LowPriorityUnlock();
-	}
-	
-	FORCEINLINE void GetLowPriority(double& Out)
-	{
-		LowPriorityLock();
-		Out = Time;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void SetLowPriority(const double& InValue)
+	FORCEINLINE void SetTimeLowPriority(const double InValue)
 	{
 		LowPriorityLock();
 		Time = InValue;
 		LowPriorityUnlock();
 	}
 
-	FORCEINLINE void GetHighPriority(double& Out)
+	FORCEINLINE void GetTimeHighPriority(double& Out)
 	{
 		HighPriorityLock();
 		Out = Time;
 		HighPriorityUnlock();
 	}
 
-	FORCEINLINE void SetHighPriority(const double& InValue)
+	FORCEINLINE void AddTimeLowPriority()
 	{
-		HighPriorityLock();
-		Time = InValue;
-		HighPriorityUnlock();
+		LowPriorityLock();
+		Time += 0.0001f; // 100 microseconds
+		LowPriorityUnlock();
 	}
-
+	
 private:
 	FORCEINLINE void LowPriorityLock()
 	{
@@ -186,11 +151,20 @@ private:
 	FCollisionShape VirtualCapsule;
 
 private: // multithreading stuff
-
-	std::mutex TimerThreadLock;
 	std::atomic<bool> bShouldTimerThreadRun;
+	std::atomic<int> TimerThreadTickCount;
 
 	void TimerThread();
 
-	TStaticArray<FThreadedTimer, 1024, 0> Timers;
+	TArray<FGuid> TimerGuids;
+	TMap<FGuid, FThreadedTimer> TimerMap;
+
+	FORCEINLINE FGuid CreateNewTimer()
+	{
+		const FGuid NewGuid = FGuid::NewGuid();
+		const FThreadedTimer NewTimer;
+		TimerMap.Add(NewGuid, NewTimer);
+		TimerGuids.Add(NewGuid);
+		return NewGuid;
+	}
 };
