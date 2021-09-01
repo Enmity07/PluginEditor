@@ -2,8 +2,9 @@
 
 #include "BenchmarkingTool.h"
 
-#define GET load
-#define SET store
+#include <chrono>
+
+#define TimePoint std::chrono::time_point<std::chrono::steady_clock>
 
 // Sets default values
 ABenchmarkingTool::ABenchmarkingTool()
@@ -73,10 +74,12 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 	const FVector InitialPoint = FVector::ZeroVector;
 	const FVector KindaSmallGap = FVector(KINDA_SMALL_NUMBER, 0.0f, 0.0f);
 
-	
+
 	
 	if(bDoLineTraceBenchmarks)
 	{
+		const TimePoint StartTime = std::chrono::high_resolution_clock::now();
+	
 		for(int i = 0; i < LineTracesPerTick; i++)
 		{
 			const FVector StartPoint = InitialPoint + (KindaSmallGap * i);
@@ -86,6 +89,21 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 				AsyncLineTraceType, StartPoint, EndPoint, ObjectQueryParams,
 				FCollisionQueryParams::DefaultQueryParam,
 				bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : 0
+			);
+		}
+
+		const TimePoint EndTime = std::chrono::high_resolution_clock::now();
+		
+		const auto Duration = std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime);
+		const int MicroSeconds = Duration.count();
+
+		if(GEngine)
+		{
+			// Print the highest vector to screen as a string
+			GEngine->AddOnScreenDebugMessage(
+				-1, 1.0f, FColor::Yellow,
+				FString::Printf(TEXT("Highest Vector Hit: %d"),
+				MicroSeconds)
 			);
 		}
 	}
