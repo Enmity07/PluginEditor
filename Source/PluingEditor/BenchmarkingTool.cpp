@@ -2,15 +2,16 @@
 
 #include "BenchmarkingTool.h"
 
-#include <chrono>
-
-#define TimePoint std::chrono::time_point<std::chrono::steady_clock>
+#define TIME_TO_PRINT 1.0f
 
 // Sets default values
 ABenchmarkingTool::ABenchmarkingTool()
 {
 	bDoLineTraceBenchmarks = false;
 	bDoObjectSweepTraceBenchmarks = false;
+
+	bShouldPrintThisFrame = false;
+	TimeSinceLastUpdate = 0.0f;
 	
 	LineTracesPerTick = 100;
 	LineTraceLength = 100.0f;
@@ -65,6 +66,16 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
+	if(TimeSinceLastUpdate >= TIME_TO_PRINT)
+	{
+		TimeSinceLastUpdate = 0.0f;
+		bShouldPrintThisFrame = true;
+	}
+	else
+	{
+		TimeSinceLastUpdate += DeltaTime;
+	}
+	
 	if(!WorldRef)
 		return;
 	
@@ -73,12 +84,12 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 
 	const FVector InitialPoint = FVector::ZeroVector;
 	const FVector KindaSmallGap = FVector(KINDA_SMALL_NUMBER, 0.0f, 0.0f);
-
-
 	
 	if(bDoLineTraceBenchmarks)
 	{
-		const TimePoint StartTime = std::chrono::high_resolution_clock::now();
+		FHighResTimer SpeedCounter;
+
+		SpeedCounter.StartTimer();
 	
 		for(int i = 0; i < LineTracesPerTick; i++)
 		{
@@ -92,19 +103,20 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 			);
 		}
 
-		const TimePoint EndTime = std::chrono::high_resolution_clock::now();
-		
-		const auto Duration = std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime);
-		const int MicroSeconds = Duration.count();
+		const FTimerTimes SpeedCounterTimes = SpeedCounter.StopTimer();
 
-		if(GEngine)
+		if(bShouldPrintThisFrame)
 		{
-			// Print the highest vector to screen as a string
-			GEngine->AddOnScreenDebugMessage(
-				-1, 1.0f, FColor::Yellow,
-				FString::Printf(TEXT("Highest Vector Hit: %d"),
-				MicroSeconds)
-			);
+			if(GEngine)
+			{
+				// Print the highest vector to screen as a string
+				GEngine->AddOnScreenDebugMessage(
+					-1, 1.0f, FColor::Yellow,
+					FString::Printf(TEXT("Time (sec):(milli):(micro): %f::%f::%lld::%lld"),
+					SpeedCounterTimes.Seconds, SpeedCounterTimes.MilliSeconds, SpeedCounterTimes.MicroSeconds, SpeedCounterTimes.NanoSeconds)
+				);
+			}
+			bShouldPrintThisFrame = false;
 		}
 	}
 

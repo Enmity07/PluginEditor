@@ -2,10 +2,65 @@
 
 #pragma once
 
+#include <chrono>
+
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
 #include "HAL/Thread.h"
 #include "BenchmarkingTool.generated.h"
+
+#define Chrono std::chrono
+
+#define STEADY_CLOCK std::chrono::time_point<std::chrono::steady_clock>
+#define GET_HIGH_RES_TIME std::chrono::high_resolution_clock::now()
+
+#define CHR_DURATION(_OUT_TYPE_, _TIME_SCALE_) std::chrono::duration<_OUT_TYPE_, std::ratio<1, _TIME_SCALE_>>
+
+struct PLUINGEDITOR_API FTimerTimes
+{
+	double Seconds;
+	double MilliSeconds;
+	long long MicroSeconds;
+	long long NanoSeconds;
+
+	FTimerTimes(const double InSec, const double InMilli, const long long InMicro, const long long InNano)
+		: Seconds(InSec), MilliSeconds(InMilli), MicroSeconds(InMicro), NanoSeconds(InNano)
+	{ }
+
+	FTimerTimes() : Seconds(0.00f), MilliSeconds(0.00f), MicroSeconds(0), NanoSeconds(0)
+	{ }
+};
+
+struct PLUINGEDITOR_API FHighResTimer
+{
+	FORCEINLINE void StartTimer()
+	{
+		StartTime = GET_HIGH_RES_TIME;
+	}
+
+	FORCEINLINE FTimerTimes StopTimer()
+	{
+		EndTime = GET_HIGH_RES_TIME;
+
+		const auto DeltaTime = EndTime - StartTime;
+		
+		const auto NanosecondsRaw =
+			Chrono::duration_cast<Chrono::nanoseconds>(DeltaTime);
+
+		const auto MicrosecondsRaw =
+			Chrono::duration_cast<Chrono::microseconds>(DeltaTime);
+
+		const long long NanoSeconds = NanosecondsRaw.count();
+		const long long MicroSeconds = MicrosecondsRaw.count();
+		const double MilliSeconds = MicroSeconds * 0.001f;
+		const double Seconds = MilliSeconds * 0.001f;
+		
+		return FTimerTimes(Seconds, MilliSeconds, MicroSeconds, NanoSeconds);
+	}
+private:
+	STEADY_CLOCK StartTime;
+	STEADY_CLOCK EndTime;
+};
 
 UCLASS()
 class PLUINGEDITOR_API ABenchmarkingTool : public AActor
@@ -79,4 +134,7 @@ private:
 	EAsyncTraceType	AsyncObjectSweepsTraceType;
 
 	FCollisionShape VirtualCapsule;
+
+	uint8 bShouldPrintThisFrame : 1;
+	float TimeSinceLastUpdate;
 };
