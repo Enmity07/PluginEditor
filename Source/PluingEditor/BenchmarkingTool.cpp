@@ -2,19 +2,13 @@
 
 #include "BenchmarkingTool.h"
 
-#include <thread>
-
-#include <mutex>
 #include <chrono>
 
-#define GET load
-#define SET store
+#define TimePoint std::chrono::time_point<std::chrono::steady_clock>
 
 // Sets default values
 ABenchmarkingTool::ABenchmarkingTool()
 {
-	bShouldTimerThreadRun.SET(false);
-	
 	bDoLineTraceBenchmarks = false;
 	bDoObjectSweepTraceBenchmarks = false;
 	
@@ -59,16 +53,6 @@ void ABenchmarkingTool::BeginPlay()
 	}
 
 	VirtualCapsule = FCollisionShape::MakeCapsule(ObjectSweepsTraceRadius, ObjectSweepsTraceHalfHeight);
-	double TempTime = 0.0f;
-
-	Timers[0].GetTime(true, TempTime);
-	Timers[0].GetTime(true, TempTime);
-	
-	std::thread([=]()
-	{
-		this->bShouldTimerThreadRun.SET(false);
-		this->TimerThread();
-	});
 }
 
 void ABenchmarkingTool::EndPlay(const EEndPlayReason::Type EndPlayReason)
@@ -90,10 +74,12 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 	const FVector InitialPoint = FVector::ZeroVector;
 	const FVector KindaSmallGap = FVector(KINDA_SMALL_NUMBER, 0.0f, 0.0f);
 
-	
+
 	
 	if(bDoLineTraceBenchmarks)
 	{
+		const TimePoint StartTime = std::chrono::high_resolution_clock::now();
+	
 		for(int i = 0; i < LineTracesPerTick; i++)
 		{
 			const FVector StartPoint = InitialPoint + (KindaSmallGap * i);
@@ -105,7 +91,21 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 				bLineTraceDelegateOutput ? &LineTraceCompleteDelegate : 0
 			);
 		}
+
+		const TimePoint EndTime = std::chrono::high_resolution_clock::now();
 		
+		const auto Duration = std::chrono::duration_cast<std::chrono::microseconds>(EndTime - StartTime);
+		const int MicroSeconds = Duration.count();
+
+		if(GEngine)
+		{
+			// Print the highest vector to screen as a string
+			GEngine->AddOnScreenDebugMessage(
+				-1, 1.0f, FColor::Yellow,
+				FString::Printf(TEXT("Highest Vector Hit: %d"),
+				MicroSeconds)
+			);
+		}
 	}
 
 	if(bDoObjectSweepTraceBenchmarks)
@@ -136,20 +136,4 @@ void ABenchmarkingTool::OnObjectSweepTraceComplete(const FTraceHandle& Handle, F
 {
 	if(!Handle.IsValid())
 		return;
-}
-
-void ABenchmarkingTool::TimerThread()
-{
-	unsigned long long TickCount = 0;
-	double LocalTicker = 0.00f;
-	
-	for(;;) //infinite loop
-	{
-		if(bShouldTimerThreadRun.GET() == false)
-			return;
-		
-		std::this_thread::sleep_for(std::chrono::microseconds(100));
-		LocalTicker += 0.0001f;
-		TickCount++;
-	}
 }

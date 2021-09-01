@@ -2,115 +2,10 @@
 
 #pragma once
 
-#include <atomic>
-#include <mutex>
-
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "HAL/Thread.h"
 #include "BenchmarkingTool.generated.h"
-
-struct PLUINGEDITOR_API FThreadedTimer
-{
-	double Time;
-
-	FThreadedTimer() : Time(0.0f)
-	{ }
-	FThreadedTimer(const double InTime) : Time(InTime)
-	{ }
-	~FThreadedTimer()
-	{ }
-	
-	FORCEINLINE void GetTime(const bool bHighPriority, double& Out)
-	{
-		if(bHighPriority)
-		{
-			HighPriorityLock();
-			Out = Time;
-			HighPriorityUnlock();
-			return;
-		}
-
-		LowPriorityLock();
-		Out = Time;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void SetTime(const bool bHighPriority, const double InValue)
-	{
-		if(bHighPriority)
-		{
-			HighPriorityLock();
-			Time = InValue;
-			HighPriorityUnlock();
-			return;
-		}
-
-		LowPriorityLock();
-		Time = InValue;
-		LowPriorityUnlock();
-	}
-	
-	FORCEINLINE void GetLowPriority(double& Out)
-	{
-		LowPriorityLock();
-		Out = Time;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void SetLowPriority(const double& InValue)
-	{
-		LowPriorityLock();
-		Time = InValue;
-		LowPriorityUnlock();
-	}
-
-	FORCEINLINE void GetHighPriority(double& Out)
-	{
-		HighPriorityLock();
-		Out = Time;
-		HighPriorityUnlock();
-	}
-
-	FORCEINLINE void SetHighPriority(const double& InValue)
-	{
-		HighPriorityLock();
-		Time = InValue;
-		HighPriorityUnlock();
-	}
-
-private:
-	FORCEINLINE void LowPriorityLock()
-	{
-		LowPriorityAccessLock.lock();
-        NextToAccessLock.lock();
-        DataAccessLock.lock();
-
-        NextToAccessLock.unlock();
-	}
-
-	FORCEINLINE void LowPriorityUnlock()
-	{
-		DataAccessLock.unlock();
-		LowPriorityAccessLock.unlock();
-	}
-	
-	FORCEINLINE void HighPriorityLock()
-	{
-		NextToAccessLock.lock();
-		DataAccessLock.lock();
-
-		NextToAccessLock.unlock();
-	}
-
-	FORCEINLINE void HighPriorityUnlock()
-	{
-		DataAccessLock.unlock();
-	}
-	
-	std::mutex DataAccessLock;
-	std::mutex NextToAccessLock;
-	std::mutex LowPriorityAccessLock;
-};
 
 UCLASS()
 class PLUINGEDITOR_API ABenchmarkingTool : public AActor
@@ -184,13 +79,4 @@ private:
 	EAsyncTraceType	AsyncObjectSweepsTraceType;
 
 	FCollisionShape VirtualCapsule;
-
-private: // multithreading stuff
-
-	std::mutex TimerThreadLock;
-	std::atomic<bool> bShouldTimerThreadRun;
-
-	void TimerThread();
-
-	TStaticArray<FThreadedTimer, 1024, 0> Timers;
 };
