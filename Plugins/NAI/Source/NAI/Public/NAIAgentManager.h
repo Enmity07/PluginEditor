@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <mutex>
+
 #include "NAI/NAIUtils/Public/NAICalculator.h"
 #include "NavigationSystem.h"
 
@@ -707,6 +709,102 @@ public:
 	}
 };
 
+struct NAI_API FPriorityMutex
+{
+	FPriorityMutex()
+	{ }
+	FPriorityMutex(const FPriorityMutex& InCopy)
+	{ }
+	
+	~FPriorityMutex()
+	{
+		LowPriorityAccessLock.unlock();
+		NextToAccessLock.unlock();
+		DataAccessLock.unlock();
+	}
+	
+	FORCEINLINE void LowPriorityLock()
+	{
+		LowPriorityAccessLock.lock();
+		NextToAccessLock.lock();
+		DataAccessLock.lock();
+
+		NextToAccessLock.unlock();
+	}
+
+	FORCEINLINE void LowPriorityUnlock()
+	{
+		DataAccessLock.unlock();
+		LowPriorityAccessLock.unlock();
+	}
+	
+	FORCEINLINE void HighPriorityLock()
+	{
+		NextToAccessLock.lock();
+		DataAccessLock.lock();
+
+		NextToAccessLock.unlock();
+	}
+
+	FORCEINLINE void HighPriorityUnlock()
+	{
+		DataAccessLock.unlock();
+	}
+private:
+	std::mutex LowPriorityAccessLock;
+	std::mutex NextToAccessLock;
+	std::mutex DataAccessLock;
+};
+
+struct NAI_API FScopedPriorityMutex
+{
+	FScopedPriorityMutex(FPriorityMutex* Mutex, const bool bHighPriorityAccess = false)
+	{
+		if(!Mutex)
+			return;
+
+		MutexReference = Mutex;
+
+		if(bHighPriorityAccess)
+		{
+			Mutex->HighPriorityLock();
+			bHighPriority = true;
+			return;
+		}
+
+		Mutex->LowPriorityLock();
+	}
+
+	~FScopedPriorityMutex()
+	{
+		if(bHighPriority)
+		{
+			MutexReference->HighPriorityUnlock();
+			return;
+		}
+
+		MutexReference->LowPriorityUnlock();
+	}
+	
+private:
+	FPriorityMutex* MutexReference;
+	uint8 bHighPriority : 1;
+};
+
+struct NAI_API FSharedAgentVector
+{
+	FPriorityMutex Lock;
+	
+	FGuid Guid;
+	FVector Location;
+
+	FORCEINLINE FSharedAgentVector Get()
+	{
+		FScopedPriorityMutex HighPriorityLock(&Lock, true);
+		return *this; // this is getting a copy, not a ref
+	}
+};
+
 /**
  * This is the AgentManager. It serves as the "Brain"
  * behind each and every AI, or "Agent". All movement,
@@ -988,6 +1086,8 @@ private:
 	 */
 	UPROPERTY()
 	TArray<FGuid> AgentGuids;
+
+	
 };
 
 /**
