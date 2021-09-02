@@ -89,7 +89,8 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 	{
 		FHighResTimer SpeedCounter;
 
-		SpeedCounter.StartTimer();
+		MainPerformanceTimer.Reset();
+		MainPerformanceTimer.StartTimer();
 	
 		for(int i = 0; i < LineTracesPerTick; i++)
 		{
@@ -103,7 +104,7 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 			);
 		}
 
-		const FTimerTimes SpeedCounterTimes = SpeedCounter.StopTimer();
+		MainPerformanceTimes = MainPerformanceTimer.StopTimer();
 
 		if(bShouldPrintThisFrame)
 		{
@@ -112,8 +113,14 @@ void ABenchmarkingTool::Tick(float DeltaTime)
 				// Print the highest vector to screen as a string
 				GEngine->AddOnScreenDebugMessage(
 					-1, 1.0f, FColor::Yellow,
-					FString::Printf(TEXT("Time (sec):(milli):(micro): %f::%f::%lld::%lld"),
-					SpeedCounterTimes.Seconds, SpeedCounterTimes.MilliSeconds, SpeedCounterTimes.MicroSeconds, SpeedCounterTimes.NanoSeconds)
+					FString::Printf(TEXT(
+						"Time stats:\n"
+						"\tSeconds: %f\n"
+						"\tMilliseconds: %f\n"
+						"\tMicroseconds: %lld\n"
+						"\tNanoseconds: %lld"
+						),
+					MainPerformanceTimes.Seconds, MainPerformanceTimes.MilliSeconds, MainPerformanceTimes.MicroSeconds, MainPerformanceTimes.NanoSeconds)
 				);
 			}
 			bShouldPrintThisFrame = false;

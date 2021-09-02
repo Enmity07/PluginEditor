@@ -12,7 +12,7 @@
 #define Chrono std::chrono
 
 #define STEADY_CLOCK std::chrono::time_point<std::chrono::steady_clock>
-#define GET_HIGH_RES_TIME std::chrono::high_resolution_clock::now()
+#define GET_HIGH_RES_TIME std::chrono::high_resolution_clock::now
 
 #define CHR_DURATION(_OUT_TYPE_, _TIME_SCALE_) std::chrono::duration<_OUT_TYPE_, std::ratio<1, _TIME_SCALE_>>
 
@@ -33,14 +33,19 @@ struct PLUINGEDITOR_API FTimerTimes
 
 struct PLUINGEDITOR_API FHighResTimer
 {
+	FHighResTimer() : bHasStarted(false),
+		bIsComplete(false)
+	{ }
+
 	FORCEINLINE void StartTimer()
 	{
-		StartTime = GET_HIGH_RES_TIME;
+		StartTime = GET_HIGH_RES_TIME();
+		bHasStarted = true;
 	}
 
-	FORCEINLINE FTimerTimes StopTimer()
+	FORCEINLINE FTimerTimes& StopTimer()
 	{
-		EndTime = GET_HIGH_RES_TIME;
+		EndTime = GET_HIGH_RES_TIME();
 
 		const auto DeltaTime = EndTime - StartTime;
 		
@@ -54,10 +59,38 @@ struct PLUINGEDITOR_API FHighResTimer
 		const long long MicroSeconds = MicrosecondsRaw.count();
 		const double MilliSeconds = MicroSeconds * 0.001f;
 		const double Seconds = MilliSeconds * 0.001f;
-		
-		return FTimerTimes(Seconds, MilliSeconds, MicroSeconds, NanoSeconds);
+
+		const FTimerTimes NewCompleteTimes = FTimerTimes(Seconds, MilliSeconds, MicroSeconds, NanoSeconds);
+		CompleteTime = NewCompleteTimes;
+		bIsComplete = true;
+		return CompleteTime;
 	}
+
+	FORCEINLINE void Reset()
+	{
+		FHighResTimer();
+	}
+	
+	FORCEINLINE FTimerTimes& GetResultRaw()
+	{
+		if(bIsComplete) // has already finished
+		{
+			return CompleteTime;
+		}
+
+		if(bHasStarted) // started but not finished
+		{
+			return StopTimer(); // stop and return
+		}
+		
+		return CompleteTime; // only gets here if the timer was not running to begin with
+	}
+	
 private:
+	uint8 bHasStarted : 1;
+	uint8 bIsComplete : 1;
+	FTimerTimes CompleteTime;
+	
 	STEADY_CLOCK StartTime;
 	STEADY_CLOCK EndTime;
 };
@@ -137,4 +170,7 @@ private:
 
 	uint8 bShouldPrintThisFrame : 1;
 	float TimeSinceLastUpdate;
+
+	FHighResTimer MainPerformanceTimer;
+	FTimerTimes MainPerformanceTimes;
 };
